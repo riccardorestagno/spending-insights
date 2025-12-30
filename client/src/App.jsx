@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -14,18 +14,20 @@ export default function TransactionViewer() {
   const [pageSize, setPageSize] = useState(10);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   // Fetch categories on mount
   useEffect(() => {
     fetchCategories();
   }, []);
 
-  // Fetch transactions when category, page, or dates change
+  // Fetch transactions when category, page, dates, or sorting change
   useEffect(() => {
     if (selectedCategory) {
       fetchTransactions();
     }
-  }, [selectedCategory, currentPage, pageSize, startDate, endDate]);
+  }, [selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder]);
 
   const fetchCategories = async () => {
     try {
@@ -45,7 +47,7 @@ export default function TransactionViewer() {
     setLoading(true);
     setError(null);
     try {
-      let url = `${API_BASE_URL}/transactions?category=${encodeURIComponent(selectedCategory)}&page=${currentPage}&page_size=${pageSize}`;
+      let url = `${API_BASE_URL}/transactions?category=${encodeURIComponent(selectedCategory)}&page=${currentPage}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;
 
       if (startDate) {
         url += `&start_date=${startDate}`;
@@ -86,6 +88,27 @@ export default function TransactionViewer() {
     setStartDate('');
     setEndDate('');
     setCurrentPage(1);
+  };
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      // Toggle order if clicking the same column
+      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+    } else {
+      // New column - set to descending by default
+      setSortBy(column);
+      setSortOrder('desc');
+    }
+    setCurrentPage(1);
+  };
+
+  const getSortIcon = (column) => {
+    if (sortBy !== column) {
+      return <ArrowUpDown className="w-4 h-4 text-gray-400" />;
+    }
+    return sortOrder === 'desc'
+      ? <ArrowDown className="w-4 h-4 text-blue-600" />
+      : <ArrowUp className="w-4 h-4 text-blue-600" />;
   };
 
   const goToPage = (page) => {
@@ -240,8 +263,14 @@ export default function TransactionViewer() {
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
+                      <th
+                        onClick={() => handleSort('date')}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      >
+                        <div className="flex items-center gap-2">
+                          Date
+                          {getSortIcon('date')}
+                        </div>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Description
@@ -249,8 +278,14 @@ export default function TransactionViewer() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Account
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount (CAD)
+                      <th
+                        onClick={() => handleSort('amount')}
+                        className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                      >
+                        <div className="flex items-center justify-end gap-2">
+                          Amount (CAD)
+                          {getSortIcon('amount')}
+                        </div>
                       </th>
                     </tr>
                   </thead>

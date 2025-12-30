@@ -1,6 +1,6 @@
 import math
 import sqlite3
-from typing import Optional
+from typing import Optional, Literal
 from fastapi import APIRouter, Query, HTTPException
 
 from schemas.transaction import Transaction, PaginatedResponse
@@ -16,6 +16,8 @@ async def get_transactions(
     page_size: int = Query(10, ge=1, le=100),
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    sort_by: Literal["date", "amount"] = Query("date", description="Sort by date or amount"),
+    sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
 ):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -54,7 +56,12 @@ async def get_transactions(
     total_pages = math.ceil(total_items / page_size)
     offset = (page - 1) * page_size
 
-    # Get paginated transactions with date filters
+    # Build ORDER BY clause
+    sort_column = "transaction_date" if sort_by == "date" else "cad_amount"
+    order_direction = "ASC" if sort_order == "asc" else "DESC"
+    order_clause = f"{sort_column} {order_direction}"
+
+    # Get paginated transactions with date filters and sorting
     cursor.execute(
         f"""
         SELECT id, account_type, account_number, transaction_date,
@@ -62,7 +69,7 @@ async def get_transactions(
                cad_amount, usd_amount, category
         FROM transactions
         WHERE {where_clause}
-        ORDER BY transaction_date DESC
+        ORDER BY {order_clause}
         LIMIT ? OFFSET ?
         """,
         params + [page_size, offset],
@@ -83,5 +90,7 @@ async def get_transactions(
             "category_total": round(category_total, 2),
             "start_date": start_date,
             "end_date": end_date,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
         },
     )
