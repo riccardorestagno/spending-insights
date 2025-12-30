@@ -1,7 +1,25 @@
 import sqlite3
 import pandas as pd
+from datetime import datetime
 
 from core.config import DB_PATH
+
+
+def normalize_date(date_str):
+    """Normalize date to YYYY-MM-DD format"""
+    if pd.isna(date_str):
+        return None
+    try:
+        # Try parsing M/D/YYYY format (RBC format)
+        dt = datetime.strptime(str(date_str), "%m/%d/%Y")
+        return dt.strftime("%Y-%m-%d")
+    except:
+        try:
+            # Already in YYYY-MM-DD format
+            dt = datetime.strptime(str(date_str), "%Y-%m-%d")
+            return dt.strftime("%Y-%m-%d")
+        except:
+            return str(date_str)  # Keep as-is if it can't parse
 
 
 def load_csv_to_db(csv_path: str) -> int:
@@ -19,6 +37,9 @@ def load_csv_to_db(csv_path: str) -> int:
     missing = [col for col in required_columns if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
+
+    # Normalize transaction dates to YYYY-MM-DD format
+    df['Transaction Date'] = df['Transaction Date'].apply(normalize_date)
 
     df = df.rename(columns={
         "Account Type": "account_type",
