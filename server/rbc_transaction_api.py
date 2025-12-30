@@ -1,6 +1,7 @@
 import sqlite3
 import pandas as pd
 from fastapi import FastAPI, Query, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from contextlib import asynccontextmanager
@@ -15,6 +16,13 @@ async def lifespan(app_instance: FastAPI):
     # Shutdown (if needed)
 
 app = FastAPI(title="RBC Transaction API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Database configuration
 DB_PATH = "data/transactions.db"
