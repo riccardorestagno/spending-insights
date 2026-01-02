@@ -1,8 +1,9 @@
 import math
 import sqlite3
-from typing import Optional, Literal
+from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 
+from models.enums import Category, TransactionType, SortBy, SortOrder
 from schemas.transaction import Transaction, PaginatedResponse
 from core.config import DB_PATH
 
@@ -16,9 +17,9 @@ async def get_transactions(
         page_size: int = Query(10, ge=1, le=100),
         start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
         end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-        transaction_type: Literal["all", "debit", "credit"] = Query("debit", description="Filter by transaction type"),
-        sort_by: Literal["date", "amount"] = Query("date", description="Sort by date or amount"),
-        sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
+        transaction_type: TransactionType = Query(TransactionType.DEBIT, description="Filter by transaction type"),
+        sort_by: SortBy = Query(SortBy.DATE, description="Sort by date or amount"),
+        sort_order: SortOrder = Query(SortOrder.DESCENDING, description="Sort order"),
 ):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -28,7 +29,7 @@ async def get_transactions(
     where_conditions = []
     params = []
 
-    if category:
+    if category and category != Category.ALL:
         where_conditions.append("category = ?")
         params.append(category)
 
@@ -40,9 +41,9 @@ async def get_transactions(
         where_conditions.append("transaction_date <= ?")
         params.append(end_date)
 
-    if transaction_type == "debit":
+    if transaction_type == TransactionType.DEBIT:
         where_conditions.append("cad_amount < 0")
-    elif transaction_type == "credit":
+    elif transaction_type == TransactionType.CREDIT:
         where_conditions.append("cad_amount > 0")
     # If "all", no condition is added
 
@@ -63,7 +64,7 @@ async def get_transactions(
         filter_desc = []
         if category:
             filter_desc.append(f"category: {category}")
-        if transaction_type != "all":
+        if transaction_type != TransactionType.ALL:
             filter_desc.append(f"transaction type: {transaction_type}")
         if start_date or end_date:
             filter_desc.append("the given date range")
@@ -78,8 +79,8 @@ async def get_transactions(
     offset = (page - 1) * page_size
 
     # Build ORDER BY clause
-    sort_column = "transaction_date" if sort_by == "date" else "cad_amount"
-    order_direction = "ASC" if sort_order == "asc" else "DESC"
+    sort_column = "transaction_date" if sort_by == SortBy.DATE else "cad_amount"
+    order_direction = "ASC" if sort_order == SortOrder.ASCENDING else "DESC"
     order_clause = f"{sort_column} {order_direction}"
 
     # Get paginated transactions with filters and sorting
