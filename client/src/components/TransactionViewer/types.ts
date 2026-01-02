@@ -1,3 +1,14 @@
+export enum TransactionType {
+  Debit = 'debit',
+  Credit = 'credit',
+  All = 'all',
+}
+
+export enum SortOrder {
+  Ascending = 'asc',
+  Descending = 'desc'
+}
+
 export interface Transaction {
   id: string | number;
   transaction_date: string;
@@ -31,6 +42,8 @@ export interface FilterProps {
   onStartDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onEndDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClearDates: () => void;
+  transactionType: TransactionType;
+  onTransactionTypeChange: (type: TransactionType) => void;
   metadata: Metadata | null;
 }
 

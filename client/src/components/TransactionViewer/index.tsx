@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Transaction, Category, Metadata } from './types';
+import { Transaction, Category, Metadata, TransactionType, SortOrder } from './types';
 import { API_BASE_URL } from '../../utils/constants';
 import { Header } from './Header';
 import { Filters } from './Filters';
@@ -14,24 +14,25 @@ export default function TransactionViewer() {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
+  const [transactionType, setTransactionType] = useState<TransactionType>(TransactionType.Debit);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortOrder, setSortOrder] = useState<SortOrder>(SortOrder.Descending);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [transactionType]);
 
   useEffect(() => {
     if (selectedCategory) {
       fetchTransactions();
     }
-  }, [selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder]);
+  }, [transactionType, selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder]);
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/categories`);
+      const response = await fetch(`${API_BASE_URL}/categories?transaction_type=${encodeURIComponent(transactionType)}`);
       if (!response.ok) throw new Error('Failed to fetch categories');
       const data = await response.json();
       setCategories(data.categories);
@@ -47,7 +48,7 @@ export default function TransactionViewer() {
     setLoading(true);
     setError(null);
     try {
-      let url = `${API_BASE_URL}/transactions?category=${encodeURIComponent(selectedCategory)}&page=${currentPage}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;
+      let url = `${API_BASE_URL}/transactions?transaction_type=${encodeURIComponent(transactionType)}&category=${encodeURIComponent(selectedCategory)}&page=${currentPage}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;
       if (startDate) url += `&start_date=${startDate}`;
       if (endDate) url += `&end_date=${endDate}`;
 
@@ -63,6 +64,11 @@ export default function TransactionViewer() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTransactionTypeChange = (type: TransactionType) => {
+    setTransactionType(type);
+    setCurrentPage(1);
   };
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -87,10 +93,10 @@ export default function TransactionViewer() {
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
-      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+      setSortOrder(sortOrder === SortOrder.Descending ? SortOrder.Ascending : SortOrder.Descending);
     } else {
       setSortBy(column);
-      setSortOrder('desc');
+      setSortOrder(SortOrder.Descending);
     }
     setCurrentPage(1);
   };
@@ -117,6 +123,8 @@ export default function TransactionViewer() {
             handleDateChange();
           }}
           onClearDates={clearDateFilters}
+          transactionType={transactionType}
+          onTransactionTypeChange={handleTransactionTypeChange}
           metadata={metadata}
         />
 

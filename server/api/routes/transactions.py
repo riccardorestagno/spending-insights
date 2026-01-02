@@ -11,21 +11,26 @@ router = APIRouter()
 
 @router.get("/transactions", response_model=PaginatedResponse)
 async def get_transactions(
-    category: str = Query(..., description="Category to filter by"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
-    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    sort_by: Literal["date", "amount"] = Query("date", description="Sort by date or amount"),
-    sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
+        category: Optional[str] = Query(None, description="Category to filter by"),
+        page: int = Query(1, ge=1),
+        page_size: int = Query(10, ge=1, le=100),
+        start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+        end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+        transaction_type: Literal["all", "debit", "credit"] = Query("debit", description="Filter by transaction type"),
+        sort_by: Literal["date", "amount"] = Query("date", description="Sort by date or amount"),
+        sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
 ):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    # Build WHERE clause with date filters
-    where_conditions = ["category = ?"]
-    params = [category]
+    # Build WHERE clause with optional category, date, and transaction type filters
+    where_conditions = []
+    params = []
+
+    if category:
+        where_conditions.append("category = ?")
+        params.append(category)
 
     if start_date:
         where_conditions.append("transaction_date >= ?")
@@ -35,9 +40,16 @@ async def get_transactions(
         where_conditions.append("transaction_date <= ?")
         params.append(end_date)
 
-    where_clause = " AND ".join(where_conditions)
+    if transaction_type == "debit":
+        where_conditions.append("cad_amount < 0")
+    elif transaction_type == "credit":
+        where_conditions.append("cad_amount > 0")
+    # If "all", no condition is added
 
-    # Get count and total with date filters
+    # Build WHERE clause or use "1=1" if no conditions
+    where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+
+    # Get count and total with filters
     cursor.execute(
         f"SELECT COUNT(*) AS count, SUM(cad_amount) AS total FROM transactions WHERE {where_clause}",
         params,
@@ -48,10 +60,19 @@ async def get_transactions(
 
     if total_items == 0:
         conn.close()
-        raise HTTPException(
-            status_code=404,
-            detail=f"No transactions found for category: {category} with the given date range",
-        )
+        filter_desc = []
+        if category:
+            filter_desc.append(f"category: {category}")
+        if transaction_type != "all":
+            filter_desc.append(f"transaction type: {transaction_type}")
+        if start_date or end_date:
+            filter_desc.append("the given date range")
+
+        detail = "No transactions found"
+        if filter_desc:
+            detail += f" for {' with '.join(filter_desc)}"
+
+        raise HTTPException(status_code=404, detail=detail)
 
     total_pages = math.ceil(total_items / page_size)
     offset = (page - 1) * page_size
@@ -61,7 +82,7 @@ async def get_transactions(
     order_direction = "ASC" if sort_order == "asc" else "DESC"
     order_clause = f"{sort_column} {order_direction}"
 
-    # Get paginated transactions with date filters and sorting
+    # Get paginated transactions with filters and sorting
     cursor.execute(
         f"""
         SELECT id, account_type, account_number, transaction_date,
@@ -88,8 +109,10 @@ async def get_transactions(
             "total_pages": total_pages,
             "total_items": total_items,
             "category_total": round(category_total, 2),
+            "category": category,
             "start_date": start_date,
             "end_date": end_date,
+            "transaction_type": transaction_type,
             "sort_by": sort_by,
             "sort_order": sort_order,
         },
