@@ -22,7 +22,7 @@ export default function TransactionViewer() {
 
   useEffect(() => {
     fetchCategories();
-  }, [transactionType]);
+  }, [transactionType, startDate, endDate]);
 
   useEffect(() => {
     if (selectedCategory) {
@@ -32,7 +32,11 @@ export default function TransactionViewer() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/categories?transaction_type=${encodeURIComponent(transactionType)}`);
+      let url = `${API_BASE_URL}/categories?transaction_type=${encodeURIComponent(transactionType)}`;
+      if (startDate) url += `&start_date=${startDate}`;
+      if (endDate) url += `&end_date=${endDate}`;
+
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch categories');
       const data = await response.json();
       setCategories(data.categories);
