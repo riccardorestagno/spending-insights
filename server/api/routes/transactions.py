@@ -118,3 +118,43 @@ async def get_transactions(
             "sort_order": sort_order,
         },
     )
+
+
+@router.patch("/transactions/{transaction_id}/category", response_model=Transaction)
+async def update_transaction_category(
+    transaction_id: int,
+    category: Category = Query(..., description="New category for the transaction"),
+):
+    if category == Category.ALL:
+        raise HTTPException(status_code=400, detail="Cannot set a transaction to this category")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "UPDATE transactions SET category = ? WHERE id = ?",
+        (category.value, transaction_id),
+    )
+
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    conn.commit()
+
+    cursor.execute(
+        """
+        SELECT id, account_type, account_number, transaction_date,
+               cheque_number, description_1, description_2,
+               cad_amount, usd_amount, category
+        FROM transactions
+        WHERE id = ?
+        """,
+        (transaction_id,),
+    )
+
+    row = cursor.fetchone()
+    conn.close()
+
+    return Transaction(**dict(row))
