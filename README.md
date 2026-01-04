@@ -8,6 +8,7 @@ AI-powered transaction categorization and analysis for RBC bank exports.
 
 ```bash
 cd server
+mkdir data
 
 python -m venv venv
 
