@@ -16,6 +16,7 @@ export interface Transaction {
   description_2?: string;
   account_type: string;
   cad_amount: number;
+  category: string;
 }
 
 export interface Category {

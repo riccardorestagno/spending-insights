@@ -16,6 +16,9 @@ export const TransactionRow: React.FC<TransactionRowProps> = ({ transaction }) =
     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
       {transaction.account_type}
     </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+      {transaction.category}
+    </td>
     <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
       <span className={transaction.cad_amount < 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
         {formatCurrency(transaction.cad_amount)}
