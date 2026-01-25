@@ -73,6 +73,7 @@ export interface TransactionsTableProps {
   metadata: Metadata | null;
   currentPage: number;
   onPageChange: (page: number) => void;
+  categories: Category[];
 }
 
 export interface CategorySummaryProps {

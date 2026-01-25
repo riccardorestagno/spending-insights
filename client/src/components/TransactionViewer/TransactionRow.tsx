@@ -5,27 +5,22 @@ import { API_BASE_URL } from '../../utils/constants';
 
 interface EditableTransactionRowProps extends TransactionRowProps {
   categories: Category[];
+  isEditMode: boolean;
   onCategoryUpdate?: (transactionId: string | number, newCategory: string) => void;
 }
 
 export const TransactionRow: React.FC<EditableTransactionRowProps> = ({ 
   transaction, 
   categories,
+  isEditMode,
   onCategoryUpdate 
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(transaction.category);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleCategoryClick = () => {
-    setIsEditing(true);
-    setError(null);
-  };
-
   const handleCategoryChange = async (newCategory: string) => {
     if (newCategory === transaction.category) {
-      setIsEditing(false);
       return;
     }
 
@@ -51,20 +46,11 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
       if (onCategoryUpdate) {
         onCategoryUpdate(transaction.id, newCategory);
       }
-      setIsEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update');
       setSelectedCategory(transaction.category);
     } finally {
       setIsUpdating(false);
-    }
-  };
-
-  const handleBlur = () => {
-    if (!isUpdating) {
-      setIsEditing(false);
-      setSelectedCategory(transaction.category);
-      setError(null);
     }
   };
 
@@ -83,35 +69,30 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
         {transaction.account_type}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-        {isEditing ? (
+        {isEditMode ? (
           <div className="relative">
             <select
               value={selectedCategory}
               onChange={(e) => handleCategoryChange(e.target.value)}
-              onBlur={handleBlur}
               disabled={isUpdating}
-              autoFocus
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="block w-full rounded border-blue-300 text-sm text-gray-500 focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {categories.map((cat) => (
-                <option key={cat.name} value={cat.name}>
-                  {cat.name}
-                </option>
-              ))}
+              {categories
+                .filter((cat) => cat.name.toLowerCase() !== 'all')
+                .map((cat) => (
+                  <option key={cat.name} value={cat.name}>
+                    {cat.name}
+                  </option>
+                ))}
             </select>
             {error && (
-              <div className="absolute top-full left-0 mt-1 text-xs text-red-600 whitespace-nowrap">
+              <div className="absolute top-full left-0 mt-1 text-xs text-red-600 whitespace-nowrap bg-red-50 px-2 py-1 rounded shadow-sm z-10">
                 {error}
               </div>
             )}
           </div>
         ) : (
-          <button
-            onClick={handleCategoryClick}
-            className="text-left hover:text-blue-600 hover:underline focus:outline-none focus:text-blue-600"
-          >
-            {selectedCategory}
-          </button>
+          selectedCategory
         )}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-right">

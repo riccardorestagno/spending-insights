@@ -1,8 +1,19 @@
 import React from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Pencil } from 'lucide-react';
 import { TableHeaderProps } from './types';
 
-export const TableHeader: React.FC<TableHeaderProps> = ({ sortBy, sortOrder, onSort }) => {
+interface ExtendedTableHeaderProps extends TableHeaderProps {
+  isEditMode: boolean;
+  onToggleEditMode: () => void;
+}
+
+export const TableHeader: React.FC<ExtendedTableHeaderProps> = ({ 
+  sortBy, 
+  sortOrder, 
+  onSort,
+  isEditMode,
+  onToggleEditMode
+}) => {
   const getSortIcon = (column: string) => {
     if (sortBy !== column) {
       return <ArrowUpDown className="w-4 h-4 text-gray-400" />;
@@ -31,7 +42,18 @@ export const TableHeader: React.FC<TableHeaderProps> = ({ sortBy, sortOrder, onS
           Account
         </th>
         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-          Category
+          <div className="flex items-center gap-2">
+            Category
+            <button
+              onClick={onToggleEditMode}
+              className={`p-1 rounded hover:bg-gray-200 transition-colors ${
+                isEditMode ? 'text-blue-600 bg-blue-50' : 'text-gray-400'
+              }`}
+              title={isEditMode ? 'Exit edit mode' : 'Edit categories'}
+            >
+              <Pencil size={14} />
+            </button>
+          </div>
         </th>
         <th
           onClick={() => onSort('amount')}

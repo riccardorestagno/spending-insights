@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TransactionsTableProps } from './types';
 import { TableHeader } from './TableHeader';
 import { TransactionRow } from './TransactionRow';
@@ -14,45 +14,55 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
   currentPage,
   onPageChange,
   categories,
-}) => (
-  <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-    {loading ? (
-      <div className="p-12 text-center">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <p className="mt-4 text-gray-600">Loading transactions...</p>
-      </div>
-    ) : transactions.length > 0 ? (
-      <>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <TableHeader sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-            <tbody className="bg-white divide-y divide-gray-200">
-              {transactions.map((transaction) => (
-              <TransactionRow 
-                key={transaction.id} 
-                transaction={transaction}
-                categories={categories} // Pass categories
-                onCategoryUpdate={(id, newCategory) => {
-                  // Optional: refresh data or update local state
-                  console.log(`Updated transaction ${id} to category ${newCategory}`);
-                }}
-              />
-            ))}
-            </tbody>
-          </table>
+}) => {
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      {loading ? (
+        <div className="p-12 text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading transactions...</p>
         </div>
-        {metadata && (
-          <Pagination
-            currentPage={currentPage}
-            totalPages={metadata.total_pages}
-            onPageChange={onPageChange}
-          />
-        )}
-      </>
-    ) : (
-      <div className="p-12 text-center text-gray-500">
-        No transactions found for this category
-      </div>
-    )}
-  </div>
-);
+      ) : transactions.length > 0 ? (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <TableHeader 
+                sortBy={sortBy} 
+                sortOrder={sortOrder} 
+                onSort={onSort}
+                isEditMode={isEditMode}
+                onToggleEditMode={() => setIsEditMode(!isEditMode)}
+              />
+              <tbody className="bg-white divide-y divide-gray-200">
+                {transactions.map((transaction) => (
+                  <TransactionRow 
+                    key={transaction.id} 
+                    transaction={transaction}
+                    categories={categories}
+                    isEditMode={isEditMode}
+                    onCategoryUpdate={(id, newCategory) => {
+                      console.log(`Updated transaction ${id} to category ${newCategory}`);
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {metadata && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={metadata.total_pages}
+              onPageChange={onPageChange}
+            />
+          )}
+        </>
+      ) : (
+        <div className="p-12 text-center text-gray-500">
+          No transactions found for this category
+        </div>
+      )}
+    </div>
+  );
+};
