@@ -12,7 +12,8 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
   onSort,
   metadata,
   currentPage,
-  onPageChange
+  onPageChange,
+  categories,
 }) => (
   <div className="bg-white rounded-lg shadow-sm overflow-hidden">
     {loading ? (
@@ -27,8 +28,16 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
             <TableHeader sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
             <tbody className="bg-white divide-y divide-gray-200">
               {transactions.map((transaction) => (
-                <TransactionRow key={transaction.id} transaction={transaction} />
-              ))}
+              <TransactionRow 
+                key={transaction.id} 
+                transaction={transaction}
+                categories={categories} // Pass categories
+                onCategoryUpdate={(id, newCategory) => {
+                  // Optional: refresh data or update local state
+                  console.log(`Updated transaction ${id} to category ${newCategory}`);
+                }}
+              />
+            ))}
             </tbody>
           </table>
         </div>

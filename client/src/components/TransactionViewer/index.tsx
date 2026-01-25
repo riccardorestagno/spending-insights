@@ -147,6 +147,7 @@ export default function TransactionViewer() {
           metadata={metadata}
           currentPage={currentPage}
           onPageChange={setCurrentPage}
+          categories={categories}
         />
       </div>
     </div>
