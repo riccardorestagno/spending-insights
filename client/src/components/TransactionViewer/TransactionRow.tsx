@@ -75,7 +75,7 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
               value={selectedCategory}
               onChange={(e) => handleCategoryChange(e.target.value)}
               disabled={isUpdating}
-              className="block w-full rounded border-blue-300 text-sm text-gray-500 focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="block w-full rounded border-gray-300 text-sm text-gray-500 focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {categories
                 .filter((cat) => cat.name.toLowerCase() !== 'all')
