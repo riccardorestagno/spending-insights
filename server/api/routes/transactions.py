@@ -14,7 +14,7 @@ router = APIRouter()
 async def get_transactions(
         category: Optional[str] = Query(None, description="Category to filter by"),
         page: int = Query(1, ge=1),
-        page_size: int = Query(10, ge=1, le=100),
+        page_size: int = Query(10, ge=1, le=10000000),
         start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
         end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
         transaction_type: TransactionType = Query(TransactionType.DEBIT, description="Filter by transaction type"),

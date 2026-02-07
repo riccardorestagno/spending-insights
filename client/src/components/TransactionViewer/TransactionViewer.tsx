@@ -5,7 +5,11 @@ import { Header } from './Header';
 import { Filters } from './Filters';
 import { TransactionsTable } from './TransactionsTable';
 
-export default function TransactionViewer() {
+interface TransactionViewerProps {
+  onDateRangeChange?: (range: { startDate?: string; endDate?: string }) => void;
+}
+
+export default function TransactionViewer({ onDateRangeChange }: TransactionViewerProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -29,6 +33,16 @@ export default function TransactionViewer() {
       fetchTransactions();
     }
   }, [transactionType, selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder]);
+
+  // Notify parent component when date range changes
+  useEffect(() => {
+    if (onDateRangeChange) {
+      onDateRangeChange({
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      });
+    }
+  }, [startDate, endDate, onDateRangeChange]);
 
   const fetchCategories = async () => {
     try {
