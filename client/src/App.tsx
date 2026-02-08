@@ -7,6 +7,7 @@ import { API_BASE_URL } from './utils/constants';
 function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [dateRange, setDateRange] = useState<{ startDate?: string; endDate?: string }>({});
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   useEffect(() => {
     fetchCategories();
@@ -24,13 +25,21 @@ function App() {
     }
   };
 
+  const handleCategoryClick = (category: string) => {
+    setSelectedCategory(category);
+  };
+
   return (
     <div className="App min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Transaction Viewer - Left side */}
           <div className="flex-1 lg:w-2/3">
-            <TransactionViewer onDateRangeChange={setDateRange} />
+            <TransactionViewer 
+              onDateRangeChange={setDateRange}
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+            />
           </div>
           
           {/* Category Chart - Right side */}
@@ -40,6 +49,7 @@ function App() {
                 categories={categories}
                 startDate={dateRange.startDate}
                 endDate={dateRange.endDate}
+                onCategoryClick={handleCategoryClick}
               />
             </div>
           </div>

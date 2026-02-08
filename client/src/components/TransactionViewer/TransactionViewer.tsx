@@ -7,9 +7,15 @@ import { TransactionsTable } from './TransactionsTable';
 
 interface TransactionViewerProps {
   onDateRangeChange?: (range: { startDate?: string; endDate?: string }) => void;
+  selectedCategory?: string;
+  onCategoryChange?: (category: string) => void;
 }
 
-export default function TransactionViewer({ onDateRangeChange }: TransactionViewerProps) {
+export default function TransactionViewer({ 
+  onDateRangeChange,
+  selectedCategory: externalSelectedCategory,
+  onCategoryChange
+}: TransactionViewerProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -25,6 +31,13 @@ export default function TransactionViewer({ onDateRangeChange }: TransactionView
   const [sortOrder, setSortOrder] = useState<SortOrder>(SortOrder.Descending);
 
   useEffect(() => {
+    if (externalSelectedCategory && externalSelectedCategory !== selectedCategory) {
+      setSelectedCategory(externalSelectedCategory);
+      setCurrentPage(1);
+    }
+  }, [externalSelectedCategory]);
+
+  useEffect(() => {
     fetchCategories();
   }, [transactionType, startDate, endDate]);
 
@@ -34,7 +47,6 @@ export default function TransactionViewer({ onDateRangeChange }: TransactionView
     }
   }, [transactionType, selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder]);
 
-  // Notify parent component when date range changes
   useEffect(() => {
     if (onDateRangeChange) {
       onDateRangeChange({
@@ -54,8 +66,14 @@ export default function TransactionViewer({ onDateRangeChange }: TransactionView
       if (!response.ok) throw new Error('Failed to fetch categories');
       const data = await response.json();
       setCategories(data.categories);
-      if (data.categories.length > 0) {
-        setSelectedCategory(data.categories[0].name);
+      
+      // Only set default category if there's no external selection
+      if (data.categories.length > 0 && !selectedCategory && !externalSelectedCategory) {
+        const defaultCategory = data.categories[0].name;
+        setSelectedCategory(defaultCategory);
+        if (onCategoryChange) {
+          onCategoryChange(defaultCategory);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -90,8 +108,13 @@ export default function TransactionViewer({ onDateRangeChange }: TransactionView
   };
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedCategory(e.target.value);
+    const newCategory = e.target.value;
+    setSelectedCategory(newCategory);
     setCurrentPage(1);
+    
+    if (onCategoryChange) {
+      onCategoryChange(newCategory);
+    }
   };
 
   const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

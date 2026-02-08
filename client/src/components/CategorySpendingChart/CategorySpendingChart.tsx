@@ -17,6 +17,7 @@ interface CategorySpendingChartProps {
   startDate?: string;
   endDate?: string;
   categories: Category[];
+  onCategoryClick?: (category: string) => void;
 }
 
 interface CategoryTotal {
@@ -43,6 +44,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
   startDate,
   endDate,
   categories,
+  onCategoryClick,
 }) => {
   const [categoryTotals, setCategoryTotals] = useState<CategoryTotal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -96,6 +98,12 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCategoryClick = (category: string) => {
+    if (onCategoryClick) {
+      onCategoryClick(category);
     }
   };
 
@@ -184,6 +192,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
                 className="transition-opacity cursor-pointer"
                 onMouseEnter={() => setHoveredCategory(slice.category)}
                 onMouseLeave={() => setHoveredCategory(null)}
+                onClick={() => handleCategoryClick(slice.category)}
               />
             ))}
           </svg>
@@ -204,6 +213,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
                 className="flex items-center justify-between p-2 rounded cursor-pointer hover:bg-gray-50 transition-colors"
                 onMouseEnter={() => setHoveredCategory(cat.category)}
                 onMouseLeave={() => setHoveredCategory(null)}
+                onClick={() => handleCategoryClick(cat.category)}
                 style={{
                   backgroundColor: hoveredCategory === cat.category ? '#F9FAFB' : 'transparent',
                 }}
