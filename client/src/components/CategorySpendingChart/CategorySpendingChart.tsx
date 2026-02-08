@@ -115,7 +115,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
       const startAngle = currentAngle;
       const endAngle = currentAngle + angle;
       
-      const path = describeArc(100, 100, 80, startAngle, endAngle);
+      const path = describeDonutArc(100, 100, 50, 80, startAngle, endAngle);
       currentAngle = endAngle;
       
       return {
@@ -126,16 +126,27 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
     });
   };
 
-  // Helper function to create SVG arc path
-  const describeArc = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
-    const start = polarToCartesian(x, y, radius, endAngle);
-    const end = polarToCartesian(x, y, radius, startAngle);
+  // Helper function to create SVG donut arc path
+  const describeDonutArc = (
+    x: number, 
+    y: number, 
+    innerRadius: number, 
+    outerRadius: number, 
+    startAngle: number, 
+    endAngle: number
+  ) => {
+    const outerStart = polarToCartesian(x, y, outerRadius, endAngle);
+    const outerEnd = polarToCartesian(x, y, outerRadius, startAngle);
+    const innerStart = polarToCartesian(x, y, innerRadius, endAngle);
+    const innerEnd = polarToCartesian(x, y, innerRadius, startAngle);
+    
     const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
     
     return [
-      'M', x, y,
-      'L', start.x, start.y,
-      'A', radius, radius, 0, largeArcFlag, 0, end.x, end.y,
+      'M', outerStart.x, outerStart.y,
+      'A', outerRadius, outerRadius, 0, largeArcFlag, 0, outerEnd.x, outerEnd.y,
+      'L', innerEnd.x, innerEnd.y,
+      'A', innerRadius, innerRadius, 0, largeArcFlag, 1, innerStart.x, innerStart.y,
       'Z'
     ].join(' ');
   };
@@ -184,6 +195,14 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
         <div className="flex justify-center">
           <div className="relative">
             <svg width="300" height="300" viewBox="0 0 200 200">
+              {/* White background circle for center text */}
+              <circle
+                cx="100"
+                cy="100"
+                r="48"
+                fill="white"
+                className="drop-shadow-sm"
+              />
               {slices.map((slice) => (
                 <path
                   key={slice.category}
@@ -199,8 +218,8 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
             </svg>
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="text-center">
-                <div className="text-sm text-gray-500">Total</div>
-                <div className="text-xl font-semibold">{formatCurrency(totalSpending)}</div>
+                <div className="text-sm text-gray-600 font-medium">Total</div>
+                <div className="text-xl font-bold text-gray-900">{formatCurrency(totalSpending)}</div>
               </div>
             </div>
           </div>
