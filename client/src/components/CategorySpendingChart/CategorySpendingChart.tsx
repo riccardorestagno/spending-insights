@@ -176,62 +176,64 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
   const totalSpending = categoryTotals.reduce((sum, cat) => sum + cat.total, 0);
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-xl font-semibold mb-4">Spending by Category</h2>
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <h2 className="text-xl font-semibold mb-6">Spending by Category</h2>
       
-      <div className="flex flex-col md:flex-row items-center gap-8">
+      <div className="flex flex-col gap-6">
         {/* Pie Chart */}
-        <div className="relative">
-          <svg width="240" height="240" viewBox="0 0 200 200">
-            {slices.map((slice) => (
-              <path
-                key={slice.category}
-                d={slice.path}
-                fill={slice.color}
-                opacity={hoveredCategory && !slice.isHovered ? 0.5 : 1}
-                className="transition-opacity cursor-pointer"
-                onMouseEnter={() => setHoveredCategory(slice.category)}
-                onMouseLeave={() => setHoveredCategory(null)}
-                onClick={() => handleCategoryClick(slice.category)}
-              />
-            ))}
-          </svg>
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center">
-              <div className="text-sm text-gray-500">Total</div>
-              <div className="text-lg font-semibold">{formatCurrency(totalSpending)}</div>
+        <div className="flex justify-center">
+          <div className="relative">
+            <svg width="300" height="300" viewBox="0 0 200 200">
+              {slices.map((slice) => (
+                <path
+                  key={slice.category}
+                  d={slice.path}
+                  fill={slice.color}
+                  opacity={hoveredCategory && !slice.isHovered ? 0.5 : 1}
+                  className="transition-opacity cursor-pointer hover:opacity-80"
+                  onMouseEnter={() => setHoveredCategory(slice.category)}
+                  onMouseLeave={() => setHoveredCategory(null)}
+                  onClick={() => handleCategoryClick(slice.category)}
+                />
+              ))}
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-center">
+                <div className="text-sm text-gray-500">Total</div>
+                <div className="text-xl font-semibold">{formatCurrency(totalSpending)}</div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Legend */}
-        <div className="flex-1">
-          <div className="space-y-2">
+        <div className="w-full">
+          <div className="space-y-1">
             {categoryTotals.map((cat) => (
               <div
                 key={cat.category}
-                className="flex items-center justify-between p-2 rounded cursor-pointer hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-between p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-all"
                 onMouseEnter={() => setHoveredCategory(cat.category)}
                 onMouseLeave={() => setHoveredCategory(null)}
                 onClick={() => handleCategoryClick(cat.category)}
                 style={{
-                  backgroundColor: hoveredCategory === cat.category ? '#F9FAFB' : 'transparent',
+                  backgroundColor: hoveredCategory === cat.category ? '#F3F4F6' : 'transparent',
                 }}
               >
-                <div className="flex items-center gap-3 flex-1">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
                   <div
-                    className="w-4 h-4 rounded"
+                    className="w-4 h-4 rounded flex-shrink-0"
                     style={{ backgroundColor: cat.color }}
                   />
-                  <span className="text-sm font-medium text-gray-700">
+                  <span className="text-sm font-medium text-gray-700 truncate">
                     {cat.category}
                   </span>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-shrink-0 ml-3">
                   <span className="text-sm text-gray-500">
                     {cat.percentage.toFixed(1)}%
                   </span>
-                  <span className="text-sm font-semibold text-gray-900 min-w-[80px] text-right">
+                  <span className="text-sm font-semibold text-gray-900 min-w-[90px] text-right">
                     {formatCurrency(cat.total)}
                   </span>
                 </div>

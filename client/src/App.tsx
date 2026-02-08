@@ -31,10 +31,10 @@ function App() {
 
   return (
     <div className="App min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col lg:flex-row gap-6">
+      <div className="max-w-full mx-auto px-6 py-8">
+        <div className="flex flex-col xl:flex-row gap-8">
           {/* Transaction Viewer - Left side */}
-          <div className="flex-1 lg:w-2/3">
+          <div className="flex-1">
             <TransactionViewer 
               onDateRangeChange={setDateRange}
               selectedCategory={selectedCategory}
@@ -43,7 +43,7 @@ function App() {
           </div>
           
           {/* Category Chart - Right side */}
-          <div className="lg:w-1/3">
+          <div className="xl:w-[450px] flex-shrink-0">
             <div className="sticky top-8">
               <CategorySpendingChart 
                 categories={categories}
