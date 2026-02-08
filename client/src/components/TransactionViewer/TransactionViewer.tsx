@@ -42,9 +42,7 @@ export default function TransactionViewer({
   }, [transactionType, startDate, endDate]);
 
   useEffect(() => {
-    if (selectedCategory) {
-      fetchTransactions();
-    }
+    fetchTransactions();
   }, [transactionType, selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder]);
 
   useEffect(() => {
@@ -104,6 +102,7 @@ export default function TransactionViewer({
 
   const handleTransactionTypeChange = (type: TransactionType) => {
     setTransactionType(type);
+    setSelectedCategory('');
     setCurrentPage(1);
   };
 
