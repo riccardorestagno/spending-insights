@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import List, Optional
 
+from models.enums import CategoryOut
+
 
 class Transaction(BaseModel):
     id: int
@@ -12,7 +14,7 @@ class Transaction(BaseModel):
     description_2: Optional[str]
     cad_amount: float
     usd_amount: Optional[float]
-    category: str
+    category: CategoryOut
 
 
 class PaginatedResponse(BaseModel):

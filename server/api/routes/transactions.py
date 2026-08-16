@@ -3,7 +3,7 @@ import sqlite3
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 
-from models.enums import Category, TransactionType, SortBy, SortOrder
+from models.enums import Category, TransactionType, SortBy, SortOrder, CategoryOut
 from schemas.transaction import Transaction, PaginatedResponse
 from core.config import DB_PATH
 
@@ -100,7 +100,11 @@ async def get_transactions(
     rows = cursor.fetchall()
     conn.close()
 
-    transactions = [Transaction(**dict(row)) for row in rows]
+    transactions = []
+    for row in rows:
+        row_dict = dict(row)
+        row_dict["category"] = CategoryOut.from_category(Category(row_dict["category"]))
+        transactions.append(Transaction(**row_dict))
 
     return PaginatedResponse(
         data=transactions,
@@ -157,4 +161,7 @@ async def update_transaction_category(
     row = cursor.fetchone()
     conn.close()
 
-    return Transaction(**dict(row))
+    row_dict = dict(row)
+    row_dict["category"] = CategoryOut.from_category(Category(row_dict["category"]))
+
+    return Transaction(**row_dict)

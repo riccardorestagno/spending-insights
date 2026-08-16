@@ -15,10 +15,7 @@ CATEGORIES = [
     "Insurance",
     "Housing",
     "Travel",
-    "Education",
-    "Personal Care",
     "Subscriptions",
-    "Income",
     "Transfers",
     "Other"
 ]

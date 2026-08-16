@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../../utils/constants';
 interface EditableTransactionRowProps extends TransactionRowProps {
   categories: Category[];
   isEditMode: boolean;
-  onCategoryUpdate?: (transactionId: string | number, newCategory: string) => void;
+  onCategoryUpdate?: (transactionId: string | number, newCategory: Category) => void;
 }
 
 export const TransactionRow: React.FC<EditableTransactionRowProps> = ({ 
@@ -15,12 +15,12 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
   isEditMode,
   onCategoryUpdate 
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState(transaction.category);
+  const [selectedCategory, setSelectedCategory] = useState<Category>(transaction.category);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleCategoryChange = async (newCategory: string) => {
-    if (newCategory === transaction.category) {
+  const handleCategoryChange = async (newCategory: Category) => {
+    if (newCategory.value === transaction.category.value) {
       return;
     }
 
@@ -29,7 +29,7 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/transactions/${transaction.id}/category?category=${encodeURIComponent(newCategory)}`,
+        `${API_BASE_URL}/transactions/${transaction.id}/category?category=${encodeURIComponent(newCategory.value)}`,
         {
           method: 'PATCH',
           headers: {
@@ -54,6 +54,13 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
     }
   };
 
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCategory = categories.find((cat) => cat.value === e.target.value);
+    if (newCategory) {
+      handleCategoryChange(newCategory);
+    }
+  };
+
   return (
     <tr className="hover:bg-gray-50">
       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -72,16 +79,16 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
         {isEditMode ? (
           <div className="relative">
             <select
-              value={selectedCategory}
-              onChange={(e) => handleCategoryChange(e.target.value)}
+              value={selectedCategory.value}
+              onChange={handleSelectChange}
               disabled={isUpdating}
               className="block w-full rounded border-gray-300 text-sm text-gray-500 focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {categories
-                .filter((cat) => cat.name.toLowerCase() !== 'all')
+                .filter((cat) => cat.value.toLowerCase() !== 'all')
                 .map((cat) => (
-                  <option key={cat.name} value={cat.name}>
-                    {cat.name}
+                  <option key={cat.value} value={cat.value}>
+                    {cat.description}
                   </option>
                 ))}
             </select>
@@ -92,7 +99,7 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
             )}
           </div>
         ) : (
-          selectedCategory
+          selectedCategory.description
         )}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-right">

@@ -51,7 +51,8 @@ async def get_categories(
 
     categories = [
         {
-            "name": row[0],
+            "value": row[0],
+            "description": Category(row[0]).description,
             "transaction_count": row[1],
             "total": round(row[2], 2),
         }
@@ -59,7 +60,8 @@ async def get_categories(
     ]
 
     all_transactions = {
-        "name": Category.ALL.value,
+        "value": Category.ALL,
+        "description": Category.ALL.description,
         "transaction_count": sum(category["transaction_count"] for category in categories),
         "total": sum(category["total"] for category in categories),
     }

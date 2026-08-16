@@ -67,7 +67,7 @@ export default function TransactionViewer({
       
       // Only set default category if there's no external selection
       if (data.categories.length > 0 && !selectedCategory && !externalSelectedCategory) {
-        const defaultCategory = data.categories[0].name;
+        const defaultCategory = data.categories[0].value;
         setSelectedCategory(defaultCategory);
         if (onCategoryChange) {
           onCategoryChange(defaultCategory);

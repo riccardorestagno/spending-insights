@@ -89,8 +89,8 @@ export const Filters: React.FC<FilterProps> = ({
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             {categories.map((cat) => (
-              <option key={cat.name} value={cat.name}>
-                {cat.name} ({cat.transaction_count} transactions - {formatCurrency(cat.total)})
+              <option key={cat.value} value={cat.value}>
+                {cat.description} ({cat.transaction_count} transactions - {formatCurrency(cat.total)})
               </option>
             ))}
           </select>

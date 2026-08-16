@@ -5,7 +5,7 @@ import { formatCurrency } from '../../utils/formatters';
 
 interface Transaction {
   id: string | number;
-  category: string;
+  category: Category;
   cad_amount: number;
   transaction_date: string;
   description_1: string;
@@ -21,7 +21,7 @@ interface CategorySpendingChartProps {
 }
 
 interface CategoryTotal {
-  category: string;
+  category: Category;
   total: number;
   percentage: number;
   color: string;
@@ -73,22 +73,26 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
       
       const expenses = transactions.filter(t => t.cad_amount < 0);
       
-      // Group by category and sum
-      const categoryMap = new Map<string, number>();
+      // Group by category value, keeping the full Category object alongside the running total
+      const categoryMap = new Map<string, { category: Category; total: number }>();
       expenses.forEach(transaction => {
-        const category = transaction.category || 'Uncategorized';
-        const current = categoryMap.get(category) || 0;
-        categoryMap.set(category, current + Math.abs(transaction.cad_amount));
+        const category = transaction.category;
+        const existing = categoryMap.get(category.value);
+        if (existing) {
+          existing.total += Math.abs(transaction.cad_amount);
+        } else {
+          categoryMap.set(category.value, { category, total: Math.abs(transaction.cad_amount) });
+        }
       });
 
       // Calculate totals and percentages
-      const total = Array.from(categoryMap.values()).reduce((sum, val) => sum + val, 0);
+      const total = Array.from(categoryMap.values()).reduce((sum, entry) => sum + entry.total, 0);
       
-      const totals: CategoryTotal[] = Array.from(categoryMap.entries())
-        .map(([category, amount], index) => ({
-          category,
-          total: amount,
-          percentage: (amount / total) * 100,
+      const totals: CategoryTotal[] = Array.from(categoryMap.values())
+        .map((entry, index) => ({
+          category: entry.category,
+          total: entry.total,
+          percentage: (entry.total / total) * 100,
           color: COLORS[index % COLORS.length],
         }))
         .sort((a, b) => b.total - a.total);
@@ -121,7 +125,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
       return {
         ...cat,
         path,
-        isHovered: hoveredCategory === cat.category,
+        isHovered: hoveredCategory === cat.category.value,
       };
     });
   };
@@ -205,14 +209,14 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
               />
               {slices.map((slice) => (
                 <path
-                  key={slice.category}
+                  key={slice.category.value}
                   d={slice.path}
                   fill={slice.color}
                   opacity={hoveredCategory && !slice.isHovered ? 0.5 : 1}
                   className="transition-opacity cursor-pointer hover:opacity-80"
-                  onMouseEnter={() => setHoveredCategory(slice.category)}
+                  onMouseEnter={() => setHoveredCategory(slice.category.value)}
                   onMouseLeave={() => setHoveredCategory(null)}
-                  onClick={() => handleCategoryClick(slice.category)}
+                  onClick={() => handleCategoryClick(slice.category.value)}
                 />
               ))}
             </svg>
@@ -230,13 +234,13 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
           <div className="space-y-1">
             {categoryTotals.map((cat) => (
               <div
-                key={cat.category}
+                key={cat.category.value}
                 className="flex items-center justify-between p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-all"
-                onMouseEnter={() => setHoveredCategory(cat.category)}
+                onMouseEnter={() => setHoveredCategory(cat.category.value)}
                 onMouseLeave={() => setHoveredCategory(null)}
-                onClick={() => handleCategoryClick(cat.category)}
+                onClick={() => handleCategoryClick(cat.category.value)}
                 style={{
-                  backgroundColor: hoveredCategory === cat.category ? '#F3F4F6' : 'transparent',
+                  backgroundColor: hoveredCategory === cat.category.value ? '#F3F4F6' : 'transparent',
                 }}
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -245,7 +249,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
                     style={{ backgroundColor: cat.color }}
                   />
                   <span className="text-sm font-medium text-gray-700 truncate">
-                    {cat.category}
+                    {cat.category.description}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 flex-shrink-0 ml-3">
