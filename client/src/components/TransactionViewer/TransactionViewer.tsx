@@ -157,7 +157,18 @@ export default function TransactionViewer({
   return (
     <div className="w-full">
       <div className="max-w-full">
-        <Header onUploaded={handleUploaded} />
+        <Header
+          onUploaded={handleUploaded}
+          exportFilters={{
+            transactionType,
+            category: selectedCategory,
+            startDate,
+            endDate,
+            sortBy,
+            sortOrder,
+          }}
+          totalItems={metadata?.total_items}
+        />
 
         <Filters
           categories={categories}
