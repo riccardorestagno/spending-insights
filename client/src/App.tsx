@@ -8,10 +8,11 @@ function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [dateRange, setDateRange] = useState<{ startDate?: string; endDate?: string }>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [reloadKey, setReloadKey] = useState<number>(0);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [reloadKey]);
 
   const fetchCategories = async () => {
     try {
@@ -29,6 +30,12 @@ function App() {
     setSelectedCategory(category);
   };
 
+  const handleDataReloaded = () => {
+    // The new CSV may not contain the previously selected category
+    setSelectedCategory('All');
+    setReloadKey((key) => key + 1);
+  };
+
   return (
     <div className="App min-h-screen bg-gray-50">
       <div className="max-w-full mx-auto px-6 py-8">
@@ -39,6 +46,8 @@ function App() {
               onDateRangeChange={setDateRange}
               selectedCategory={selectedCategory}
               onCategoryChange={setSelectedCategory}
+              reloadKey={reloadKey}
+              onDataReloaded={handleDataReloaded}
             />
           </div>
           

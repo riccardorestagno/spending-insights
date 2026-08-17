@@ -9,12 +9,18 @@ interface TransactionViewerProps {
   onDateRangeChange?: (range: { startDate?: string; endDate?: string }) => void;
   selectedCategory?: string;
   onCategoryChange?: (category: string) => void;
+  /** Incremented by the parent to force a refetch (e.g. after a CSV upload). */
+  reloadKey?: number;
+  /** Called after a CSV upload so the parent can refresh its own state. */
+  onDataReloaded?: () => void;
 }
 
 export default function TransactionViewer({ 
   onDateRangeChange,
   selectedCategory: externalSelectedCategory,
-  onCategoryChange
+  onCategoryChange,
+  reloadKey = 0,
+  onDataReloaded
 }: TransactionViewerProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -39,11 +45,11 @@ export default function TransactionViewer({
 
   useEffect(() => {
     fetchCategories();
-  }, [transactionType, startDate, endDate]);
+  }, [transactionType, startDate, endDate, reloadKey]);
 
   useEffect(() => {
     fetchTransactions();
-  }, [transactionType, selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder]);
+  }, [transactionType, selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder, reloadKey]);
 
   useEffect(() => {
     if (onDateRangeChange) {
@@ -131,6 +137,13 @@ export default function TransactionViewer({
     setCurrentPage(1);
   };
 
+  const handleUploaded = () => {
+    // A load replaces the whole table, so start from a clean view
+    setCurrentPage(1);
+    setError(null);
+    onDataReloaded?.();
+  };
+
   const handleSort = (column: string) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === SortOrder.Descending ? SortOrder.Ascending : SortOrder.Descending);
@@ -144,7 +157,7 @@ export default function TransactionViewer({
   return (
     <div className="w-full">
       <div className="max-w-full">
-        <Header />
+        <Header onUploaded={handleUploaded} />
 
         <Filters
           categories={categories}
