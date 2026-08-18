@@ -17,6 +17,7 @@ export interface Transaction {
   account_type: string;
   cad_amount: number;
   category: Category;
+  is_reimbursed: boolean;
 }
 
 export interface Category {

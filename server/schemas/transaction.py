@@ -15,6 +15,7 @@ class Transaction(BaseModel):
     cad_amount: float
     usd_amount: Optional[float]
     category: CategoryOut
+    is_reimbursed: bool = False
 
 
 class PaginatedResponse(BaseModel):

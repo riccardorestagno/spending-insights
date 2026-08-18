@@ -55,6 +55,9 @@ export const TableHeader: React.FC<ExtendedTableHeaderProps> = ({
             </button>
           </div>
         </th>
+        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Reimbursed
+        </th>
         <th
           onClick={() => onSort('amount')}
           className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"

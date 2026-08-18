@@ -9,6 +9,20 @@ from core.config import DB_PATH
 
 router = APIRouter()
 
+# Every column the Transaction schema expects. Kept in one place so the list
+# query and the single-row lookups below can't drift apart.
+TRANSACTION_COLUMNS = """
+    id, account_type, account_number, transaction_date,
+    cheque_number, description_1, description_2,
+    cad_amount, usd_amount, category, is_reimbursed
+"""
+
+
+def to_transaction(row) -> Transaction:
+    row_dict = dict(row)
+    row_dict["category"] = CategoryOut.from_category(Category(row_dict["category"]))
+    return Transaction(**row_dict)
+
 
 @router.get("/transactions", response_model=PaginatedResponse)
 async def get_transactions(
@@ -86,9 +100,7 @@ async def get_transactions(
     # Get paginated transactions with filters and sorting
     cursor.execute(
         f"""
-        SELECT id, account_type, account_number, transaction_date,
-               cheque_number, description_1, description_2,
-               cad_amount, usd_amount, category
+        SELECT {TRANSACTION_COLUMNS}
         FROM transactions
         WHERE {where_clause}
         ORDER BY {order_clause}
@@ -100,11 +112,7 @@ async def get_transactions(
     rows = cursor.fetchall()
     conn.close()
 
-    transactions = []
-    for row in rows:
-        row_dict = dict(row)
-        row_dict["category"] = CategoryOut.from_category(Category(row_dict["category"]))
-        transactions.append(Transaction(**row_dict))
+    transactions = [to_transaction(row) for row in rows]
 
     return PaginatedResponse(
         data=transactions,
@@ -126,8 +134,8 @@ async def get_transactions(
 
 @router.patch("/transactions/{transaction_id}/category", response_model=Transaction)
 async def update_transaction_category(
-    transaction_id: int,
-    category: Category = Query(..., description="New category for the transaction"),
+        transaction_id: int,
+        category: Category = Query(..., description="New category for the transaction"),
 ):
     if category == Category.ALL:
         raise HTTPException(status_code=400, detail="Cannot set a transaction to this category")
@@ -148,10 +156,8 @@ async def update_transaction_category(
     conn.commit()
 
     cursor.execute(
-        """
-        SELECT id, account_type, account_number, transaction_date,
-               cheque_number, description_1, description_2,
-               cad_amount, usd_amount, category
+        f"""
+        SELECT {TRANSACTION_COLUMNS}
         FROM transactions
         WHERE id = ?
         """,
@@ -161,7 +167,39 @@ async def update_transaction_category(
     row = cursor.fetchone()
     conn.close()
 
-    row_dict = dict(row)
-    row_dict["category"] = CategoryOut.from_category(Category(row_dict["category"]))
+    return to_transaction(row)
 
-    return Transaction(**row_dict)
+
+@router.patch("/transactions/{transaction_id}/reimbursed", response_model=Transaction)
+async def update_transaction_reimbursed(
+        transaction_id: int,
+        is_reimbursed: bool = Query(..., description="Whether this transaction has been reimbursed"),
+):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "UPDATE transactions SET is_reimbursed = ? WHERE id = ?",
+        (int(is_reimbursed), transaction_id),
+    )
+
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    conn.commit()
+
+    cursor.execute(
+        f"""
+        SELECT {TRANSACTION_COLUMNS}
+        FROM transactions
+        WHERE id = ?
+        """,
+        (transaction_id,),
+    )
+
+    row = cursor.fetchone()
+    conn.close()
+
+    return to_transaction(row)
