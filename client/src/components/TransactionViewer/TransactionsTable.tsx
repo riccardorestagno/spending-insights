@@ -45,6 +45,9 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
                     onCategoryUpdate={(id, newCategory) => {
                       console.log(`Updated transaction ${id} to category ${newCategory}`);
                     }}
+                    onReimbursedUpdate={(id, isReimbursed) => {
+                      console.log(`Updated transaction ${id} reimbursed to ${isReimbursed}`);
+                    }}
                   />
                 ))}
               </tbody>

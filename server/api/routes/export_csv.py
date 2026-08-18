@@ -24,7 +24,18 @@ CSV_COLUMNS: List[Tuple[str, str]] = [
     ("cad_amount", "CAD$"),
     ("usd_amount", "USD$"),
     ("category", "Category"),
+    ("is_reimbursed", "Is Reimbursed"),
 ]
+
+# Columns stored as 0/1 in SQLite but written as true/false so the file stays
+# readable. db/loaders.py accepts either form on the way back in.
+BOOLEAN_COLUMNS = {"is_reimbursed"}
+
+
+def format_value(column: str, value) -> str:
+    if column in BOOLEAN_COLUMNS:
+        return "true" if value else "false"
+    return "" if value is None else value
 
 
 def build_filters(
@@ -125,7 +136,7 @@ async def export_csv(
     writer.writerow([header for _, header in CSV_COLUMNS])
     for row in rows:
         writer.writerow(
-            ["" if row[column] is None else row[column] for column, _ in CSV_COLUMNS]
+            [format_value(column, row[column]) for column, _ in CSV_COLUMNS]
         )
 
     filename = build_filename(category, start_date, end_date, transaction_type)
