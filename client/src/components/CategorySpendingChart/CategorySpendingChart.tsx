@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Category } from '../TransactionViewer/types';
 import { API_BASE_URL } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatters';
@@ -11,6 +11,7 @@ interface Transaction {
   description_1: string;
   description_2?: string;
   account_type: string;
+  is_reimbursed: boolean;
 }
 
 interface CategorySpendingChartProps {
@@ -46,10 +47,11 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
   categories,
   onCategoryClick,
 }) => {
-  const [categoryTotals, setCategoryTotals] = useState<CategoryTotal[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+  const [ignoreReimbursed, setIgnoreReimbursed] = useState(false);
 
   useEffect(() => {
     fetchTransactions();
@@ -69,41 +71,56 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
         throw new Error('Failed to fetch transactions');
       }
 
-      const transactions: Transaction[] = (await response.json()).data;
-      
-      const expenses = transactions.filter(t => t.cad_amount < 0);
-      
-      // Group by category value, keeping the full Category object alongside the running total
-      const categoryMap = new Map<string, { category: Category; total: number }>();
-      expenses.forEach(transaction => {
-        const category = transaction.category;
-        const existing = categoryMap.get(category.value);
-        if (existing) {
-          existing.total += Math.abs(transaction.cad_amount);
-        } else {
-          categoryMap.set(category.value, { category, total: Math.abs(transaction.cad_amount) });
-        }
-      });
-
-      // Calculate totals and percentages
-      const total = Array.from(categoryMap.values()).reduce((sum, entry) => sum + entry.total, 0);
-      
-      const totals: CategoryTotal[] = Array.from(categoryMap.values())
-        .map((entry, index) => ({
-          category: entry.category,
-          total: entry.total,
-          percentage: (entry.total / total) * 100,
-          color: COLORS[index % COLORS.length],
-        }))
-        .sort((a, b) => b.total - a.total);
-
-      setCategoryTotals(totals);
+      setTransactions((await response.json()).data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
+      setTransactions([]);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Derived from the fetched rows rather than refetched, so toggling the
+  // checkbox re-totals instantly without another round trip.
+  const categoryTotals = useMemo<CategoryTotal[]>(() => {
+    const expenses = transactions.filter(
+      (t) => t.cad_amount < 0 && !(ignoreReimbursed && t.is_reimbursed)
+    );
+
+    // Group by category value, keeping the full Category object alongside the running total
+    const categoryMap = new Map<string, { category: Category; total: number }>();
+    expenses.forEach((transaction) => {
+      const category = transaction.category;
+      const existing = categoryMap.get(category.value);
+      if (existing) {
+        existing.total += Math.abs(transaction.cad_amount);
+      } else {
+        categoryMap.set(category.value, { category, total: Math.abs(transaction.cad_amount) });
+      }
+    });
+
+    // Calculate totals and percentages
+    const total = Array.from(categoryMap.values()).reduce((sum, entry) => sum + entry.total, 0);
+
+    return Array.from(categoryMap.values())
+      .map((entry) => ({
+        category: entry.category,
+        total: entry.total,
+        percentage: total > 0 ? (entry.total / total) * 100 : 0,
+      }))
+      .sort((a, b) => b.total - a.total)
+      // Colour after sorting so the biggest slice is always blue, regardless
+      // of which rows the filter removed
+      .map((entry, index) => ({
+        ...entry,
+        color: COLORS[index % COLORS.length],
+      }));
+  }, [transactions, ignoreReimbursed]);
+
+  const reimbursedCount = useMemo(
+    () => transactions.filter((t) => t.cad_amount < 0 && t.is_reimbursed).length,
+    [transactions]
+  );
 
   const handleCategoryClick = (category: string) => {
     if (onCategoryClick) {
@@ -113,15 +130,15 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
 
   const createPieSlices = () => {
     let currentAngle = -90; // Start at top
-    
+
     return categoryTotals.map((cat) => {
       const angle = (cat.percentage / 100) * 360;
       const startAngle = currentAngle;
       const endAngle = currentAngle + angle;
-      
+
       const path = describeDonutArc(100, 100, 50, 80, startAngle, endAngle);
       currentAngle = endAngle;
-      
+
       return {
         ...cat,
         path,
@@ -179,92 +196,114 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
     );
   }
 
-  if (categoryTotals.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">No transactions found</div>
-      </div>
-    );
-  }
-
   const slices = createPieSlices();
   const totalSpending = categoryTotals.reduce((sum, cat) => sum + cat.total, 0);
+  const isEmpty = categoryTotals.length === 0;
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
-      <h2 className="text-xl font-semibold mb-6">Spending by Category</h2>
-      
-      <div className="flex flex-col gap-6">
-        {/* Pie Chart */}
-        <div className="flex justify-center">
-          <div className="relative">
-            <svg width="300" height="300" viewBox="0 0 200 200">
-              {/* White background circle for center text */}
-              <circle
-                cx="100"
-                cy="100"
-                r="48"
-                fill="white"
-                className="drop-shadow-sm"
-              />
-              {slices.map((slice) => (
-                <path
-                  key={slice.category.value}
-                  d={slice.path}
-                  fill={slice.color}
-                  opacity={hoveredCategory && !slice.isHovered ? 0.5 : 1}
-                  className="transition-opacity cursor-pointer hover:opacity-80"
-                  onMouseEnter={() => setHoveredCategory(slice.category.value)}
-                  onMouseLeave={() => setHoveredCategory(null)}
-                  onClick={() => handleCategoryClick(slice.category.value)}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-xl font-semibold">Spending by Category</h2>
+
+        <label
+          className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none"
+          title={
+            reimbursedCount > 0
+              ? `${reimbursedCount} reimbursed transaction${reimbursedCount === 1 ? '' : 's'} in this range`
+              : 'No reimbursed transactions in this range'
+          }
+        >
+          <input
+            type="checkbox"
+            checked={ignoreReimbursed}
+            onChange={(e) => setIgnoreReimbursed(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+          />
+          Ignore reimbursed
+        </label>
+      </div>
+
+      {isEmpty ? (
+        // Rendered inside the card, not as an early return, so the checkbox
+        // above stays reachable when the filter hides everything
+        <div className="flex items-center justify-center h-48 text-center text-gray-500">
+          {ignoreReimbursed && reimbursedCount > 0
+            ? 'Every transaction in this range is marked reimbursed.'
+            : 'No transactions found'}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {/* Pie Chart */}
+          <div className="flex justify-center">
+            <div className="relative">
+              <svg width="300" height="300" viewBox="0 0 200 200">
+                {/* White background circle for center text */}
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="48"
+                  fill="white"
+                  className="drop-shadow-sm"
                 />
-              ))}
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-center">
-                <div className="text-sm text-gray-600 font-medium">Total</div>
-                <div className="text-xl font-bold text-gray-900">{formatCurrency(totalSpending)}</div>
+                {slices.map((slice) => (
+                  <path
+                    key={slice.category.value}
+                    d={slice.path}
+                    fill={slice.color}
+                    opacity={hoveredCategory && !slice.isHovered ? 0.5 : 1}
+                    className="transition-opacity cursor-pointer hover:opacity-80"
+                    onMouseEnter={() => setHoveredCategory(slice.category.value)}
+                    onMouseLeave={() => setHoveredCategory(null)}
+                    onClick={() => handleCategoryClick(slice.category.value)}
+                  />
+                ))}
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 font-medium">Total</div>
+                  <div className="text-xl font-bold text-gray-900">{formatCurrency(totalSpending)}</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Legend */}
-        <div className="w-full">
-          <div className="space-y-1">
-            {categoryTotals.map((cat) => (
-              <div
-                key={cat.category.value}
-                className="flex items-center justify-between p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-all"
-                onMouseEnter={() => setHoveredCategory(cat.category.value)}
-                onMouseLeave={() => setHoveredCategory(null)}
-                onClick={() => handleCategoryClick(cat.category.value)}
-                style={{
-                  backgroundColor: hoveredCategory === cat.category.value ? '#F3F4F6' : 'transparent',
-                }}
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div
-                    className="w-4 h-4 rounded flex-shrink-0"
-                    style={{ backgroundColor: cat.color }}
-                  />
-                  <span className="text-sm font-medium text-gray-700 truncate">
-                    {cat.category.description}
-                  </span>
+          {/* Legend */}
+          <div className="w-full">
+            <div className="space-y-1">
+              {categoryTotals.map((cat) => (
+                <div
+                  key={cat.category.value}
+                  className="flex items-center justify-between p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-all"
+                  onMouseEnter={() => setHoveredCategory(cat.category.value)}
+                  onMouseLeave={() => setHoveredCategory(null)}
+                  onClick={() => handleCategoryClick(cat.category.value)}
+                  style={{
+                    backgroundColor: hoveredCategory === cat.category.value ? '#F3F4F6' : 'transparent',
+                  }}
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div
+                      className="w-4 h-4 rounded flex-shrink-0"
+                      style={{ backgroundColor: cat.color }}
+                    />
+                    <span className="text-sm font-medium text-gray-700 truncate">
+                      {cat.category.description}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 flex-shrink-0 ml-3">
+                    <span className="text-sm text-gray-500">
+                      {cat.percentage.toFixed(1)}%
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900 min-w-[90px] text-right">
+                      {formatCurrency(cat.total)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4 flex-shrink-0 ml-3">
-                  <span className="text-sm text-gray-500">
-                    {cat.percentage.toFixed(1)}%
-                  </span>
-                  <span className="text-sm font-semibold text-gray-900 min-w-[90px] text-right">
-                    {formatCurrency(cat.total)}
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
