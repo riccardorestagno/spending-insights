@@ -1,5 +1,5 @@
 import TransactionViewer from './components/TransactionViewer/TransactionViewer';
-import { CategorySpendingChart } from './components/CategorySpendingChart/CategorySpendingChart';
+import { InsightsPanel } from './components/InsightsPanel/InsightsPanel';
 import { useState, useEffect } from 'react';
 import { Category } from './components/TransactionViewer/types';
 import { API_BASE_URL } from './utils/constants';
@@ -7,14 +7,17 @@ import { DEFAULT_PRESET, resolvePreset } from './utils/dateRanges';
 
 function App() {
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [reloadKey, setReloadKey] = useState<number>(0);
+  // Seeded from the same preset the viewer defaults to. Starting empty meant
+  // the chart fired an unfiltered request on mount, which could resolve after
+  // the filtered one and overwrite it.
   const [dateRange, setDateRange] = useState<{ startDate?: string; endDate?: string }>(
     () => {
       const { startDate, endDate } = resolvePreset(DEFAULT_PRESET);
       return { startDate: startDate || undefined, endDate: endDate || undefined };
     }
   );
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [reloadKey, setReloadKey] = useState<number>(0);
 
   useEffect(() => {
     fetchCategories();
@@ -48,7 +51,7 @@ function App() {
         <div className="flex flex-col xl:flex-row gap-8">
           {/* Transaction Viewer - Left side */}
           <div className="flex-1">
-            <TransactionViewer
+            <TransactionViewer 
               onDateRangeChange={setDateRange}
               selectedCategory={selectedCategory}
               onCategoryChange={setSelectedCategory}
@@ -56,15 +59,16 @@ function App() {
               onDataReloaded={handleDataReloaded}
             />
           </div>
-
+          
           {/* Category Chart - Right side */}
           <div className="xl:w-[450px] flex-shrink-0">
             <div className="sticky top-8">
-              <CategorySpendingChart
+              <InsightsPanel
                 categories={categories}
                 startDate={dateRange.startDate}
                 endDate={dateRange.endDate}
                 onCategoryClick={handleCategoryClick}
+                reloadKey={reloadKey}
               />
             </div>
           </div>
