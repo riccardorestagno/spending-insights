@@ -2,6 +2,7 @@ import React from 'react';
 import { FilterProps, TransactionType } from './types';
 import { formatCurrency } from '../../utils/formatters';
 import { CategorySummary } from './CategorySummary';
+import { DateRangeFilter } from './DateRangeFilter';
 
 export const Filters: React.FC<FilterProps> = ({
   categories,
@@ -11,9 +12,10 @@ export const Filters: React.FC<FilterProps> = ({
   onPageSizeChange,
   startDate,
   endDate,
+  datePreset,
+  onDatePresetChange,
   onStartDateChange,
   onEndDateChange,
-  onClearDates,
   transactionType,
   onTransactionTypeChange,
   metadata
@@ -42,40 +44,14 @@ export const Filters: React.FC<FilterProps> = ({
       </div>
 
       {/* Date Range Row */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-        <div className="flex-1 w-full">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Start Date
-          </label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={onStartDateChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-
-        <div className="flex-1 w-full">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            End Date
-          </label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={onEndDateChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-
-        {(startDate || endDate) && (
-          <button
-            onClick={onClearDates}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 whitespace-nowrap"
-          >
-            Clear Dates
-          </button>
-        )}
-      </div>
+      <DateRangeFilter
+        preset={datePreset}
+        startDate={startDate}
+        endDate={endDate}
+        onPresetChange={onDatePresetChange}
+        onStartDateChange={onStartDateChange}
+        onEndDateChange={onEndDateChange}
+      />
 
       {/* Category and Page Size Row */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
@@ -117,4 +93,4 @@ export const Filters: React.FC<FilterProps> = ({
 
     <CategorySummary metadata={metadata} />
   </div>
-);
+);            

@@ -1,3 +1,5 @@
+import { DateRangePresetId } from '../../utils/dateRanges';
+
 export enum TransactionType {
   Debit = 'debit',
   Credit = 'credit',
@@ -35,6 +37,61 @@ export interface Metadata {
 }
 
 export interface FilterProps {
+  categories: Category[];
+  selectedCategory: string;
+  onCategoryChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  pageSize: number;
+  onPageSizeChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  startDate: string;
+  endDate: string;
+  datePreset: DateRangePresetId;
+  onDatePresetChange: (preset: DateRangePresetId) => void;
+  onStartDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onEndDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  transactionType: TransactionType;
+  onTransactionTypeChange: (type: TransactionType) => void;
+  metadata: Metadata | null;
+}
+
+export interface TableHeaderProps {
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
+  onSort: (column: string) => void;
+}
+
+export interface TransactionRowProps {
+  transaction: Transaction;
+}
+
+export interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}
+
+export interface TransactionsTableProps {
+  transactions: Transaction[];
+  loading: boolean;
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
+  onSort: (column: string) => void;
+  metadata: Metadata | null;
+  currentPage: number;
+  onPageChange: (page: number) => void;
+  categories: Category[];
+}
+
+export interface CategorySummaryProps {
+  metadata: Metadata | null;
+}
+export interface DateRangeFilterProps {
+  preset: DateRangePresetId;
+  startDate: string;
+  endDate: string;
+  onPresetChange: (preset: DateRangePresetId) => void;
+  onStartDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onEndDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}export interface FilterProps {
   categories: Category[];
   selectedCategory: string;
   onCategoryChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;

@@ -4,6 +4,11 @@ import { API_BASE_URL } from '../../utils/constants';
 import { Header } from './Header';
 import { Filters } from './Filters';
 import { TransactionsTable } from './TransactionsTable';
+import {
+  DEFAULT_PRESET,
+  DateRangePresetId,
+  resolvePreset,
+} from '../../utils/dateRanges';
 
 interface TransactionViewerProps {
   onDateRangeChange?: (range: { startDate?: string; endDate?: string }) => void;
@@ -31,8 +36,14 @@ export default function TransactionViewer({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
   const [transactionType, setTransactionType] = useState<TransactionType>(TransactionType.Debit);
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [datePreset, setDatePreset] = useState<DateRangePresetId>(DEFAULT_PRESET);
+  // Seeded from the default preset so the app opens on a sensible range
+  const [startDate, setStartDate] = useState<string>(
+    () => resolvePreset(DEFAULT_PRESET).startDate
+  );
+  const [endDate, setEndDate] = useState<string>(
+    () => resolvePreset(DEFAULT_PRESET).endDate
+  );
   const [sortBy, setSortBy] = useState<string>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>(SortOrder.Descending);
 
@@ -127,11 +138,27 @@ export default function TransactionViewer({
     setCurrentPage(1);
   };
 
+  const handleDatePresetChange = (preset: DateRangePresetId) => {
+    setDatePreset(preset);
+    setCurrentPage(1);
+
+    // Custom keeps whichever dates are already showing, so switching to it
+    // starts from the range the user was just looking at instead of blank
+    if (preset === 'custom') return;
+
+    const { startDate: start, endDate: end } = resolvePreset(preset);
+    setStartDate(start);
+    setEndDate(end);
+  };
+
   const handleDateChange = () => {
+    // Editing a date by hand only happens in custom mode, but keep the preset
+    // honest in case that ever changes
+    setDatePreset('custom');
     setCurrentPage(1);
   };
 
-  const clearDateFilters = () => {
+    const clearDateFilters = () => {
     setStartDate('');
     setEndDate('');
     setCurrentPage(1);
@@ -187,6 +214,8 @@ export default function TransactionViewer({
             handleDateChange();
           }}
           onClearDates={clearDateFilters}
+          onDatePresetChange={handleDatePresetChange}
+          datePreset={datePreset}
           transactionType={transactionType}
           onTransactionTypeChange={handleTransactionTypeChange}
           metadata={metadata}

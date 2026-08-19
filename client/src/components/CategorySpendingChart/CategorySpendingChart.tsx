@@ -54,10 +54,12 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
   const [ignoreReimbursed, setIgnoreReimbursed] = useState(false);
 
   useEffect(() => {
-    fetchTransactions();
+    const controller = new AbortController();
+    fetchTransactions(controller.signal);
+    return () => controller.abort();
   }, [startDate, endDate]);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (signal?: AbortSignal) => {
     setIsLoading(true);
     setError(null);
 
@@ -73,10 +75,16 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
 
       setTransactions((await response.json()).data);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // Fetch was aborted, do nothing
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to load data');
       setTransactions([]);
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -149,20 +157,20 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
 
   // Helper function to create SVG donut arc path
   const describeDonutArc = (
-    x: number, 
-    y: number, 
-    innerRadius: number, 
-    outerRadius: number, 
-    startAngle: number, 
+    x: number,
+    y: number,
+    innerRadius: number,
+    outerRadius: number,
+    startAngle: number,
     endAngle: number
   ) => {
     const outerStart = polarToCartesian(x, y, outerRadius, endAngle);
     const outerEnd = polarToCartesian(x, y, outerRadius, startAngle);
     const innerStart = polarToCartesian(x, y, innerRadius, endAngle);
     const innerEnd = polarToCartesian(x, y, innerRadius, startAngle);
-    
+
     const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
-    
+
     return [
       'M', outerStart.x, outerStart.y,
       'A', outerRadius, outerRadius, 0, largeArcFlag, 0, outerEnd.x, outerEnd.y,
