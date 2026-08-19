@@ -10,6 +10,8 @@ import {
 const CHART_HEIGHT = 180;
 const BAR_GAP = 6;
 const MIN_BAR_WIDTH = 14;
+const COMPACT_THRESHOLD = 6;
+const COMPACT_ROW_HEIGHT = 24;
 
 export const MonthlyTrendChart: React.FC<InsightViewProps> = ({
   transactions,
@@ -52,6 +54,8 @@ export const MonthlyTrendChart: React.FC<InsightViewProps> = ({
     );
   }
 
+  const isCompact = buckets.length < COMPACT_THRESHOLD;
+
   const maxTotal = Math.max(...buckets.map((bucket) => bucket.total));
   const barWidth = Math.max(MIN_BAR_WIDTH, 40 - buckets.length);
   const chartWidth = buckets.length * (barWidth + BAR_GAP);
@@ -88,84 +92,128 @@ export const MonthlyTrendChart: React.FC<InsightViewProps> = ({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <svg
-          width="100%"
-          viewBox={`0 0 ${chartWidth} ${CHART_HEIGHT + 28}`}
-          preserveAspectRatio="xMidYMax meet"
-          role="img"
-          aria-label={`Monthly spending from ${buckets[0].label} ${buckets[0].year} to ${buckets[buckets.length - 1].label} ${buckets[buckets.length - 1].year}`}
-          style={{ minWidth: chartWidth > 380 ? chartWidth : undefined }}
-        >
-          {summary.average > 0 && (
-            <line
-              x1="0"
-              y1={averageY}
-              x2={chartWidth}
-              y2={averageY}
-              stroke="#9CA3AF"
-              strokeWidth="1"
-              strokeDasharray="3 3"
-            />
-          )}
-
-          {buckets.map((bucket, index) => {
-            const height = maxTotal > 0 ? (bucket.total / maxTotal) * CHART_HEIGHT : 0;
-            const x = index * (barWidth + BAR_GAP);
+      {isCompact ? (
+        // Few months: horizontal bars read easier than a squat vertical chart
+        // and let every label show in full without interval-skipping.
+        <div className="space-y-2">
+          {buckets.map((bucket) => {
+            const widthPct = maxTotal > 0 ? (bucket.total / maxTotal) * 100 : 0;
             const isHovered = hoveredKey === bucket.key;
             const isEmpty = bucket.total === 0;
 
             return (
-              <g key={bucket.key}>
-                {/* Full-height hit area so thin or empty bars stay hoverable */}
-                <rect
-                  x={x}
-                  y={0}
-                  width={barWidth + BAR_GAP}
-                  height={CHART_HEIGHT + 28}
-                  fill="transparent"
-                  onMouseEnter={() => setHoveredKey(bucket.key)}
-                  onMouseLeave={() => setHoveredKey(null)}
-                />
-                <rect
-                  x={x}
-                  y={CHART_HEIGHT - height}
-                  width={barWidth}
-                  height={isEmpty ? 1 : height}
-                  rx="2"
-                  fill={isEmpty ? '#E5E7EB' : isHovered ? '#1D4ED8' : '#3B82F6'}
-                  className="transition-colors pointer-events-none"
-                />
-                {index % labelInterval === 0 && (
-                  <text
-                    x={x + barWidth / 2}
-                    y={CHART_HEIGHT + 14}
-                    textAnchor="middle"
-                    fontSize="10"
-                    fill="#6B7280"
-                    className="pointer-events-none"
-                  >
-                    {bucket.label}
-                  </text>
-                )}
-                {/* Year marker only when it changes, to avoid repeating it */}
-                {(index === 0 || bucket.month === 1) && (
-                  <text
-                    x={x + barWidth / 2}
-                    y={CHART_HEIGHT + 25}
-                    textAnchor="middle"
-                    fontSize="9"
-                    fill="#9CA3AF"
-                    className="pointer-events-none"
-                  >
-                    {bucket.year}
-                  </text>
-                )}
-              </g>
+              <div
+                key={bucket.key}
+                className="flex items-center gap-3"
+                onMouseEnter={() => setHoveredKey(bucket.key)}
+                onMouseLeave={() => setHoveredKey(null)}
+              >
+                <span className="w-16 shrink-0 text-xs text-gray-600 text-right">
+                  {bucket.label} {bucket.year}
+                </span>
+                <div
+                  className="flex-1 bg-gray-100 rounded overflow-hidden"
+                  style={{ height: COMPACT_ROW_HEIGHT }}
+                >
+                  <div
+                    className="h-full rounded transition-colors"
+                    style={{
+                      width: isEmpty ? '2px' : `${widthPct}%`,
+                      backgroundColor: isEmpty
+                        ? '#E5E7EB'
+                        : isHovered
+                        ? '#1D4ED8'
+                        : '#3B82F6',
+                    }}
+                  />
+                </div>
+                <span className="w-20 shrink-0 text-xs font-medium text-gray-900 text-right">
+                  {formatCurrency(bucket.total)}
+                </span>
+              </div>
             );
           })}
-        </svg>
-      </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <svg
+            width="100%"
+            viewBox={`0 0 ${chartWidth} ${CHART_HEIGHT + 28}`}
+            preserveAspectRatio="xMidYMax meet"
+            role="img"
+            aria-label={`Monthly spending from ${buckets[0].label} ${buckets[0].year} to ${buckets[buckets.length - 1].label} ${buckets[buckets.length - 1].year}`}
+            style={{ minWidth: chartWidth > 380 ? chartWidth : undefined }}
+          >
+            {summary.average > 0 && (
+              <line
+                x1="0"
+                y1={averageY}
+                x2={chartWidth}
+                y2={averageY}
+                stroke="#9CA3AF"
+                strokeWidth="1"
+                strokeDasharray="3 3"
+              />
+            )}
+
+            {buckets.map((bucket, index) => {
+              const height = maxTotal > 0 ? (bucket.total / maxTotal) * CHART_HEIGHT : 0;
+              const x = index * (barWidth + BAR_GAP);
+              const isHovered = hoveredKey === bucket.key;
+              const isEmpty = bucket.total === 0;
+
+              return (
+                <g key={bucket.key}>
+                  {/* Full-height hit area so thin or empty bars stay hoverable */}
+                  <rect
+                    x={x}
+                    y={0}
+                    width={barWidth + BAR_GAP}
+                    height={CHART_HEIGHT + 28}
+                    fill="transparent"
+                    onMouseEnter={() => setHoveredKey(bucket.key)}
+                    onMouseLeave={() => setHoveredKey(null)}
+                  />
+                  <rect
+                    x={x}
+                    y={CHART_HEIGHT - height}
+                    width={barWidth}
+                    height={isEmpty ? 1 : height}
+                    rx="2"
+                    fill={isEmpty ? '#E5E7EB' : isHovered ? '#1D4ED8' : '#3B82F6'}
+                    className="transition-colors pointer-events-none"
+                  />
+                  {index % labelInterval === 0 && (
+                    <text
+                      x={x + barWidth / 2}
+                      y={CHART_HEIGHT + 14}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fill="#6B7280"
+                      className="pointer-events-none"
+                    >
+                      {bucket.label}
+                    </text>
+                  )}
+                  {/* Year marker only when it changes, to avoid repeating it */}
+                  {(index === 0 || bucket.month === 1) && (
+                    <text
+                      x={x + barWidth / 2}
+                      y={CHART_HEIGHT + 25}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fill="#9CA3AF"
+                      className="pointer-events-none"
+                    >
+                      {bucket.year}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
 
       <div className="mt-3 min-h-[52px]">
         {hovered ? (
@@ -196,8 +244,11 @@ export const MonthlyTrendChart: React.FC<InsightViewProps> = ({
           </div>
         ) : (
           <p className="text-xs text-gray-500 text-center pt-3">
-            Dashed line marks the {formatCurrency(summary.average)} monthly average.
-            Hover a bar for detail.
+            {isCompact
+              ? `Average is ${formatCurrency(summary.average)}/month. Hover a bar for detail.`
+              : `Dashed line marks the ${formatCurrency(
+                  summary.average
+                )} monthly average. Hover a bar for detail.`}
           </p>
         )}
       </div>
