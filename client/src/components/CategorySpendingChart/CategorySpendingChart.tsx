@@ -1,28 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Category } from '../TransactionViewer/types';
-import { API_BASE_URL } from '../../utils/constants';
+import React, { useMemo, useState } from 'react';
+import { InsightViewProps } from '../InsightsPanel/types';
 import { formatCurrency } from '../../utils/formatters';
 
-interface Transaction {
-  id: string | number;
-  category: Category;
-  cad_amount: number;
-  transaction_date: string;
-  description_1: string;
-  description_2?: string;
-  account_type: string;
-  is_reimbursed: boolean;
-}
-
-interface CategorySpendingChartProps {
-  startDate?: string;
-  endDate?: string;
-  categories: Category[];
-  onCategoryClick?: (category: string) => void;
-}
-
 interface CategoryTotal {
-  category: Category;
+  category: { value: string; description: string };
   total: number;
   percentage: number;
   color: string;
@@ -41,62 +22,23 @@ const COLORS = [
   '#84CC16', // lime
 ];
 
-export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
-  startDate,
-  endDate,
-  categories,
+export const CategorySpendingChart: React.FC<InsightViewProps> = ({
+  transactions,
+  isLoading,
+  error,
+  ignoreReimbursed,
   onCategoryClick,
 }) => {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
-  const [ignoreReimbursed, setIgnoreReimbursed] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchTransactions(controller.signal);
-    return () => controller.abort();
-  }, [startDate, endDate]);
-
-  const fetchTransactions = async (signal?: AbortSignal) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      let url = `${API_BASE_URL}/transactions?category=All&transaction_type=debit&page=1&page_size=10000000`;
-      if (startDate) url += `&start_date=${startDate}`;
-      if (endDate) url += `&end_date=${endDate}`;
-
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Failed to fetch transactions');
-      }
-
-      setTransactions((await response.json()).data);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        // Fetch was aborted, do nothing
-        return;
-      }
-      setError(err instanceof Error ? err.message : 'Failed to load data');
-      setTransactions([]);
-    } finally {
-      if (!signal?.aborted) {
-        setIsLoading(false);
-      }
-    }
-  };
-
-  // Derived from the fetched rows rather than refetched, so toggling the
-  // checkbox re-totals instantly without another round trip.
+  // Totals are derived from data the panel already fetched, so switching
+  // tabs or toggling the filter re-renders without another round trip.
   const categoryTotals = useMemo<CategoryTotal[]>(() => {
     const expenses = transactions.filter(
       (t) => t.cad_amount < 0 && !(ignoreReimbursed && t.is_reimbursed)
     );
 
-    // Group by category value, keeping the full Category object alongside the running total
-    const categoryMap = new Map<string, { category: Category; total: number }>();
+    const categoryMap = new Map<string, { category: CategoryTotal['category']; total: number }>();
     expenses.forEach((transaction) => {
       const category = transaction.category;
       const existing = categoryMap.get(category.value);
@@ -107,7 +49,6 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
       }
     });
 
-    // Calculate totals and percentages
     const total = Array.from(categoryMap.values()).reduce((sum, entry) => sum + entry.total, 0);
 
     return Array.from(categoryMap.values())
@@ -131,9 +72,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
   );
 
   const handleCategoryClick = (category: string) => {
-    if (onCategoryClick) {
-      onCategoryClick(category);
-    }
+    onCategoryClick?.(category);
   };
 
   const createPieSlices = () => {
@@ -190,7 +129,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center h-48">
         <div className="text-gray-500">Loading chart...</div>
       </div>
     );
@@ -198,7 +137,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center h-48">
         <div className="text-red-600">Error: {error}</div>
       </div>
     );
@@ -209,31 +148,10 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
   const isEmpty = categoryTotals.length === 0;
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h2 className="text-xl font-semibold">Spending by Category</h2>
-
-        <label
-          className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none"
-          title={
-            reimbursedCount > 0
-              ? `${reimbursedCount} reimbursed transaction${reimbursedCount === 1 ? '' : 's'} in this range`
-              : 'No reimbursed transactions in this range'
-          }
-        >
-          <input
-            type="checkbox"
-            checked={ignoreReimbursed}
-            onChange={(e) => setIgnoreReimbursed(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-          />
-          Ignore reimbursed
-        </label>
-      </div>
-
+    <div>
       {isEmpty ? (
-        // Rendered inside the card, not as an early return, so the checkbox
-        // above stays reachable when the filter hides everything
+        // Rendered inside the view, not as an early return, so the panel's
+        // tabs and filter toggle stay reachable when nothing matches
         <div className="flex items-center justify-center h-48 text-center text-gray-500">
           {ignoreReimbursed && reimbursedCount > 0
             ? 'Every transaction in this range is marked reimbursed.'
@@ -246,13 +164,7 @@ export const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({
             <div className="relative">
               <svg width="300" height="300" viewBox="0 0 200 200">
                 {/* White background circle for center text */}
-                <circle
-                  cx="100"
-                  cy="100"
-                  r="48"
-                  fill="white"
-                  className="drop-shadow-sm"
-                />
+                <circle cx="100" cy="100" r="48" fill="white" className="drop-shadow-sm" />
                 {slices.map((slice) => (
                   <path
                     key={slice.category.value}
