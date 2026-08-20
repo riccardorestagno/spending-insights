@@ -93,18 +93,24 @@ export const DATE_RANGE_PRESETS: DateRangePreset[] = [
   {
     id: 'last_3_months',
     label: 'Last 3 Months',
-    resolve: (today) => ({
-      startDate: toISODate(subtractMonths(today, 3)),
-      endDate: toISODate(today),
-    }),
+    resolve: (today) => {
+      const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      return {
+        startDate: toISODate(startOfMonth(subtractMonths(previous, 2))),
+        endDate: toISODate(endOfMonth(previous)),
+      };
+    },
   },
   {
     id: 'last_6_months',
     label: 'Last 6 Months',
-    resolve: (today) => ({
-      startDate: toISODate(subtractMonths(today, 6)),
-      endDate: toISODate(today),
-    }),
+    resolve: (today) => {
+      const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      return {
+        startDate: toISODate(startOfMonth(subtractMonths(previous, 5))),
+        endDate: toISODate(endOfMonth(previous)),
+      };
+    },
   },
   {
     id: 'ytd',
