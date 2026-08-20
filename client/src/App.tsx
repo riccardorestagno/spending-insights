@@ -51,7 +51,7 @@ function App() {
         <div className="flex flex-col xl:flex-row gap-8">
           {/* Transaction Viewer - Left side */}
           <div className="flex-1">
-            <TransactionViewer 
+            <TransactionViewer
               onDateRangeChange={setDateRange}
               selectedCategory={selectedCategory}
               onCategoryChange={setSelectedCategory}
@@ -59,7 +59,7 @@ function App() {
               onDataReloaded={handleDataReloaded}
             />
           </div>
-          
+
           {/* Category Chart - Right side */}
           <div className="xl:w-[450px] flex-shrink-0">
             <div className="sticky top-8">
