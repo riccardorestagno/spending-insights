@@ -96,20 +96,20 @@ export const CategorySpendingChart: React.FC<InsightViewProps> = ({
 
   // Helper function to create SVG donut arc path
   const describeDonutArc = (
-    x: number, 
-    y: number, 
-    innerRadius: number, 
-    outerRadius: number, 
-    startAngle: number, 
+    x: number,
+    y: number,
+    innerRadius: number,
+    outerRadius: number,
+    startAngle: number,
     endAngle: number
   ) => {
     const outerStart = polarToCartesian(x, y, outerRadius, endAngle);
     const outerEnd = polarToCartesian(x, y, outerRadius, startAngle);
     const innerStart = polarToCartesian(x, y, innerRadius, endAngle);
     const innerEnd = polarToCartesian(x, y, innerRadius, startAngle);
-    
+
     const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
-    
+
     return [
       'M', outerStart.x, outerStart.y,
       'A', outerRadius, outerRadius, 0, largeArcFlag, 0, outerEnd.x, outerEnd.y,

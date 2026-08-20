@@ -122,8 +122,8 @@ export const MonthlyTrendChart: React.FC<InsightViewProps> = ({
                       backgroundColor: isEmpty
                         ? '#E5E7EB'
                         : isHovered
-                        ? '#1D4ED8'
-                        : '#3B82F6',
+                          ? '#1D4ED8'
+                          : '#3B82F6',
                     }}
                   />
                 </div>
@@ -232,9 +232,8 @@ export const MonthlyTrendChart: React.FC<InsightViewProps> = ({
               </span>
               {change !== null && (
                 <span
-                  className={`text-xs font-medium ${
-                    change > 0 ? 'text-red-600' : 'text-green-600'
-                  }`}
+                  className={`text-xs font-medium ${change > 0 ? 'text-red-600' : 'text-green-600'
+                    }`}
                 >
                   {change > 0 ? '+' : ''}
                   {change.toFixed(1)}% vs {previous?.label}
@@ -247,8 +246,8 @@ export const MonthlyTrendChart: React.FC<InsightViewProps> = ({
             {isCompact
               ? `Average is ${formatCurrency(summary.average)}/month. Hover a bar for detail.`
               : `Dashed line marks the ${formatCurrency(
-                  summary.average
-                )} monthly average. Hover a bar for detail.`}
+                summary.average
+              )} monthly average. Hover a bar for detail.`}
           </p>
         )}
       </div>
