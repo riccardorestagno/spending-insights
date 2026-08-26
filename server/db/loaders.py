@@ -1,6 +1,8 @@
 import sqlite3
 import pandas as pd
+from collections import defaultdict, deque
 from datetime import datetime
+from typing import Any, Dict, List, NamedTuple, Tuple
 
 from core.config import DB_PATH
 
@@ -53,64 +55,196 @@ def parse_reimbursed(value) -> int:
         return 0
 
 
-def load_csv_to_db(csv_path: str) -> int:
+# A transaction is considered "already in the database" when its date and
+# description match an existing row. Kept as a constant so the notion of
+# identity lives in one place.
+DUPLICATE_KEY_COLUMNS = ("transaction_date", "description_1")
+
+ALL_COLUMNS = (
+    "account_type",
+    "account_number",
+    "transaction_date",
+    "cheque_number",
+    "description_1",
+    "description_2",
+    "cad_amount",
+    "usd_amount",
+    "category",
+    "is_reimbursed",
+)
+
+COLUMN_RENAMES = {
+    "Account Type": "account_type",
+    "Account Number": "account_number",
+    "Transaction Date": "transaction_date",
+    "Cheque Number": "cheque_number",
+    "Description 1": "description_1",
+    "Description 2": "description_2",
+    "CAD$": "cad_amount",
+    "USD$": "usd_amount",
+    "Category": "category",
+    "Is Reimbursed": "is_reimbursed",
+}
+
+REQUIRED_CSV_COLUMNS = (
+    "Account Type",
+    "Account Number",
+    "Transaction Date",
+    "Description 1",
+    "CAD$",
+    "Category",
+)
+
+
+class LoadResult(NamedTuple):
+    """Outcome of a load, broken down so callers can report it precisely."""
+
+    inserted: int
+    updated: int
+    skipped: int
+
+    @property
+    def total_rows(self) -> int:
+        return self.inserted + self.updated + self.skipped
+
+    @property
+    def changed_rows(self) -> int:
+        """Rows the load actually wrote to the database."""
+        return self.inserted + self.updated
+
+
+def to_sql_value(value: Any) -> Any:
+    """Convert a pandas cell into something sqlite3 will accept.
+
+    Empty cells arrive as NaN/NaT, which sqlite3 would happily store as the
+    float 'nan'; they should become NULL instead.
+    """
+    if value is None or pd.isna(value):
+        return None
+    # numpy scalars (int64, float64, bool_) aren't natively adaptable
+    if hasattr(value, "item"):
+        return value.item()
+    return value
+
+
+def normalize_key_part(value: Any) -> str:
+    """Normalize one component of the duplicate-detection key.
+
+    Collapses whitespace and ignores case so that cosmetic differences between
+    two exports of the same transaction don't read as two distinct rows.
+    """
+    if value is None or pd.isna(value):
+        return ""
+    return " ".join(str(value).split()).casefold()
+
+
+def build_key(values: Dict[str, Any]) -> Tuple[str, ...]:
+    return tuple(normalize_key_part(values.get(col)) for col in DUPLICATE_KEY_COLUMNS)
+
+
+def read_transactions_csv(csv_path: str) -> pd.DataFrame:
+    """Read a CSV into a frame whose columns match the transactions table."""
     df = pd.read_csv(csv_path)
 
-    required_columns = [
-        "Account Type",
-        "Account Number",
-        "Transaction Date",
-        "Description 1",
-        "CAD$",
-        "Category"
-    ]
-
-    missing = [col for col in required_columns if col not in df.columns]
+    missing = [col for col in REQUIRED_CSV_COLUMNS if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
     # Normalize transaction dates to YYYY-MM-DD format
-    df['Transaction Date'] = df['Transaction Date'].apply(normalize_date)
+    df["Transaction Date"] = df["Transaction Date"].apply(normalize_date)
 
-    # Optional column: plain RBC exports predate it, so default those to false
+    # Optional column: plain RBC exports predate it. When it's absent the
+    # column is left out of the frame entirely rather than filled with zeros,
+    # so inserts fall back to the table's DEFAULT 0 and overrides leave a
+    # transaction's existing reimbursed flag alone.
     if "Is Reimbursed" in df.columns:
         df["Is Reimbursed"] = df["Is Reimbursed"].apply(parse_reimbursed)
-    else:
-        df["Is Reimbursed"] = 0
 
-    df = df.rename(columns={
-        "Account Type": "account_type",
-        "Account Number": "account_number",
-        "Transaction Date": "transaction_date",
-        "Cheque Number": "cheque_number",
-        "Description 1": "description_1",
-        "Description 2": "description_2",
-        "CAD$": "cad_amount",
-        "USD$": "usd_amount",
-        "Category": "category",
-        "Is Reimbursed": "is_reimbursed",
-    })
+    df = df.rename(columns=COLUMN_RENAMES)
 
-    columns_to_keep = [
-        "account_type",
-        "account_number",
-        "transaction_date",
-        "cheque_number",
-        "description_1",
-        "description_2",
-        "cad_amount",
-        "usd_amount",
-        "category",
-        "is_reimbursed",
-    ]
+    return df[[col for col in ALL_COLUMNS if col in df.columns]]
 
-    df = df[[col for col in columns_to_keep if col in df.columns]]
+
+def existing_ids_by_key(conn: sqlite3.Connection) -> Dict[Tuple[str, ...], deque]:
+    """Map each duplicate key to the ids of the rows already stored under it.
+
+    Ids are queued in insertion order so that repeated occurrences of the same
+    key are matched one-for-one: a file containing two identical same-day
+    transactions still lines up with two stored rows rather than collapsing
+    into one.
+    """
+    columns = ", ".join(DUPLICATE_KEY_COLUMNS)
+    cursor = conn.execute(f"SELECT id, {columns} FROM transactions ORDER BY id")
+
+    ids: Dict[Tuple[str, ...], deque] = defaultdict(deque)
+    for row in cursor.fetchall():
+        key = tuple(normalize_key_part(value) for value in row[1:])
+        ids[key].append(row[0])
+
+    return ids
+
+
+def load_csv_to_db(csv_path: str, override_existing: bool = False) -> LoadResult:
+    """Load a CSV into the transactions table without discarding what's there.
+
+    A row whose date and description already exist in the database is left
+    alone, so only genuinely new transactions are added. Existing rows are
+    never deleted; edits made in the app (category, reimbursed flag) therefore
+    survive re-uploading an overlapping statement.
+
+    When override_existing is true, matching rows are updated in place from the
+    CSV instead of being skipped. Only the columns the CSV actually provides
+    are written, so an export missing an optional column won't blank it out.
+    """
+    df = read_transactions_csv(csv_path)
+    columns: List[str] = list(df.columns)
+
+    insert_sql = (
+        f"INSERT INTO transactions ({', '.join(columns)}) "
+        f"VALUES ({', '.join('?' for _ in columns)})"
+    )
+    update_sql = (
+        f"UPDATE transactions SET {', '.join(f'{col} = ?' for col in columns)} "
+        "WHERE id = ?"
+    )
+
+    inserted = updated = skipped = 0
 
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("DELETE FROM transactions")
-    df.to_sql("transactions", conn, if_exists="append", index=False)
+    try:
+        pending_ids = existing_ids_by_key(conn)
 
-    row_count = len(df)
-    conn.close()
+        for record in df.to_dict(orient="records"):
+            values = [to_sql_value(record.get(col)) for col in columns]
+            queued = pending_ids.get(build_key(record))
 
-    return row_count
+            if queued:
+                # Claim the id so a second copy in this file doesn't match it
+                existing_id = queued.popleft()
+                if override_existing:
+                    conn.execute(update_sql, values + [existing_id])
+                    updated += 1
+                else:
+                    skipped += 1
+                continue
+
+            conn.execute(insert_sql, values)
+            inserted += 1
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    return LoadResult(inserted=inserted, updated=updated, skipped=skipped)
+
+
+def describe_load_result(result: LoadResult, override_existing: bool) -> str:
+    """Human-readable summary of a load, for API responses."""
+    parts = [f"added {result.inserted} new transactions"]
+
+    if override_existing:
+        parts.append(f"overwrote {result.updated} existing")
+    else:
+        parts.append(f"skipped {result.skipped} already in the database")
+
+    return f"Processed {result.total_rows} rows: {', '.join(parts)}"
