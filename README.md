@@ -48,11 +48,41 @@ This creates `your_export_categorized.csv` with an added "Category" column.
 
 ### 2. Load Data
 
-Visit `http://localhost:8000/docs` and use the `/load-csv` endpoint, or:
+Upload the CSV from the app with the **Upload CSV** button, or load one from a
+server-side path:
 
 ```bash
 curl -X POST "http://localhost:8000/load-csv?csv_path=your_export_categorized.csv"
 ```
+
+You can also use the `/load-csv` and `/upload-csv` endpoints from
+`http://localhost:8000/docs`.
+
+#### Duplicate handling
+
+Loads are additive: existing rows are never deleted, so you can upload
+overlapping statements without wiping your data.
+
+  - A transaction is considered "already loaded" when its **transaction date and
+    Description 1** match a row already in the database (compared ignoring case
+    and extra whitespace).
+  - Matching transactions are **skipped**, so edits you've made in the app
+    (category, reimbursed flag) survive a re-upload. Only genuinely new
+    transactions are added.
+  - Duplicates are matched one-for-one, so a statement that legitimately
+    contains two identical same-day transactions still loads both.
+
+To overwrite instead of skip, tick **Override existing transactions** in the
+upload dialog, or pass the flag directly:
+
+```bash
+curl -X POST "http://localhost:8000/load-csv?csv_path=your_export.csv&override_existing=true"
+```
+
+Overriding replaces the matching rows' values with the ones from the CSV,
+discarding any category or reimbursement edits made to them. Only the columns
+present in the CSV are written, so an export missing an optional column won't
+blank it out.
 
 ### 3. View   & Analyze
 
@@ -66,6 +96,8 @@ Open `http://localhost:5173` to browse your transactions.
   - **Sortable Columns**: Click "Date" or "Amount" headers to sort (ascending/descending)
   - **Pagination**: Browse large datasets with adjustable page sizes (10-100 items)
   - **Category Totals**: See total spending per category
+  - **Non-destructive Uploads**: Re-upload overlapping statements without
+    duplicating transactions or losing your edits
 
 ## API Key
 
