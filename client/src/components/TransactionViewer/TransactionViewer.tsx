@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction, Category, Metadata, TransactionType, SortOrder } from './types';
 import { API_BASE_URL } from '../../utils/constants';
+import { useProfileContext } from '../../contexts/ProfileContext';
 import { Header } from './Header';
 import { Filters } from './Filters';
 import { TransactionsTable } from './TransactionsTable';
@@ -27,6 +28,13 @@ export default function TransactionViewer({
   reloadKey = 0,
   onDataReloaded
 }: TransactionViewerProps) {
+  // Every request below is scoped to this profile, so the viewer only ever
+  // shows one person's transactions at a time.
+  const {
+    activeProfileId,
+    isLoading: profilesLoading,
+    isEmpty: noProfiles,
+  } = useProfileContext();
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -54,13 +62,31 @@ export default function TransactionViewer({
     }
   }, [externalSelectedCategory]);
 
+  // A different profile has a different set of categories and a different
+  // number of pages, so neither selection survives the switch.
   useEffect(() => {
-    fetchCategories();
-  }, [transactionType, startDate, endDate, reloadKey]);
+    setCurrentPage(1);
+    setSelectedCategory('');
+    setError(null);
+  }, [activeProfileId]);
 
   useEffect(() => {
+    if (activeProfileId === null) {
+      setCategories([]);
+      return;
+    }
+    fetchCategories();
+  }, [transactionType, startDate, endDate, reloadKey, activeProfileId]);
+
+  useEffect(() => {
+    if (activeProfileId === null) {
+      setTransactions([]);
+      setMetadata(null);
+      setLoading(false);
+      return;
+    }
     fetchTransactions();
-  }, [transactionType, selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder, reloadKey]);
+  }, [transactionType, selectedCategory, currentPage, pageSize, startDate, endDate, sortBy, sortOrder, reloadKey, activeProfileId]);
 
   useEffect(() => {
     if (onDateRangeChange) {
@@ -73,7 +99,7 @@ export default function TransactionViewer({
 
   const fetchCategories = async () => {
     try {
-      let url = `${API_BASE_URL}/categories?transaction_type=${encodeURIComponent(transactionType)}`;
+      let url = `${API_BASE_URL}/categories?transaction_type=${encodeURIComponent(transactionType)}&profile_id=${activeProfileId}`;
       if (startDate) url += `&start_date=${startDate}`;
       if (endDate) url += `&end_date=${endDate}`;
 
@@ -99,11 +125,20 @@ export default function TransactionViewer({
     setLoading(true);
     setError(null);
     try {
-      let url = `${API_BASE_URL}/transactions?transaction_type=${encodeURIComponent(transactionType)}&category=${encodeURIComponent(selectedCategory)}&page=${currentPage}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;
+      let url = `${API_BASE_URL}/transactions?profile_id=${activeProfileId}&transaction_type=${encodeURIComponent(transactionType)}&category=${encodeURIComponent(selectedCategory)}&page=${currentPage}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}`;
       if (startDate) url += `&start_date=${startDate}`;
       if (endDate) url += `&end_date=${endDate}`;
 
       const response = await fetch(url);
+
+      // A profile with nothing in it yet is an empty table, not a failure —
+      // the API reports "no matches" as a 404.
+      if (response.status === 404) {
+        setTransactions([]);
+        setMetadata(null);
+        return;
+      }
+
       if (!response.ok) throw new Error('Failed to fetch transactions');
       const data = await response.json();
       setTransactions(data.data);
@@ -187,6 +222,7 @@ export default function TransactionViewer({
         <Header
           onUploaded={handleUploaded}
           exportFilters={{
+            profileId: activeProfileId,
             transactionType,
             category: selectedCategory,
             startDate,
@@ -197,47 +233,64 @@ export default function TransactionViewer({
           totalItems={metadata?.total_items}
         />
 
-        <Filters
-          categories={categories}
-          selectedCategory={selectedCategory}
-          onCategoryChange={handleCategoryChange}
-          pageSize={pageSize}
-          onPageSizeChange={handlePageSizeChange}
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={(e) => {
-            setStartDate(e.target.value);
-            handleDateChange();
-          }}
-          onEndDateChange={(e) => {
-            setEndDate(e.target.value);
-            handleDateChange();
-          }}
-          onClearDates={clearDateFilters}
-          onDatePresetChange={handleDatePresetChange}
-          datePreset={datePreset}
-          transactionType={transactionType}
-          onTransactionTypeChange={handleTransactionTypeChange}
-          metadata={metadata}
-        />
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
-            {error}
+        {noProfiles ? (
+          // First run: there's nothing to filter or sort yet, so the only
+          // thing on screen is what to do next.
+          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+            <h2 className="text-lg font-semibold text-gray-900">
+              No profiles yet
+            </h2>
+            <p className="mt-2 text-gray-600">
+              Upload a CSV to create your first profile. Each profile keeps its
+              own transactions, so several people can share this database and
+              switch between them here.
+            </p>
           </div>
-        )}
+        ) : (
+          <>
+            <Filters
+              categories={categories}
+              selectedCategory={selectedCategory}
+              onCategoryChange={handleCategoryChange}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={(e) => {
+                setStartDate(e.target.value);
+                handleDateChange();
+              }}
+              onEndDateChange={(e) => {
+                setEndDate(e.target.value);
+                handleDateChange();
+              }}
+              onClearDates={clearDateFilters}
+              onDatePresetChange={handleDatePresetChange}
+              datePreset={datePreset}
+              transactionType={transactionType}
+              onTransactionTypeChange={handleTransactionTypeChange}
+              metadata={metadata}
+            />
 
-        <TransactionsTable
-          transactions={transactions}
-          loading={loading}
-          sortBy={sortBy}
-          sortOrder={sortOrder}
-          onSort={handleSort}
-          metadata={metadata}
-          currentPage={currentPage}
-          onPageChange={setCurrentPage}
-          categories={categories}
-        />
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+                {error}
+              </div>
+            )}
+
+            <TransactionsTable
+              transactions={transactions}
+              loading={loading || profilesLoading}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={handleSort}
+              metadata={metadata}
+              currentPage={currentPage}
+              onPageChange={setCurrentPage}
+              categories={categories}
+            />
+          </>
+        )}
       </div>
     </div>
   );

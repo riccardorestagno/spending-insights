@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Category } from '../TransactionViewer/types';
 import { useTransactions } from '../../hooks/useTransactions';
+import { useProfileContext } from '../../contexts/ProfileContext';
 import { INSIGHT_VIEWS, DEFAULT_VIEW_ID } from './views';
 
 interface InsightsPanelProps {
@@ -24,10 +25,14 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({
   const [ignoreReimbursed, setIgnoreReimbursed] = useState(false);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
+  // Charts follow the switcher: only the selected profile is ever charted
+  const { activeProfileId } = useProfileContext();
+
   const { transactions, isLoading, error } = useTransactions(
     startDate,
     endDate,
-    reloadKey
+    reloadKey,
+    activeProfileId
   );
 
   // Falls back to the first view if a registered view is ever removed

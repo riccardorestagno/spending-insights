@@ -2,9 +2,10 @@ import sqlite3
 import pandas as pd
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import Any, Dict, List, NamedTuple, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
-from core.config import DB_PATH
+from db.database import connect
+from db.profiles import resolve_target_profile_id
 
 
 def normalize_date(date_str):
@@ -165,8 +166,14 @@ def read_transactions_csv(csv_path: str) -> pd.DataFrame:
     return df[[col for col in ALL_COLUMNS if col in df.columns]]
 
 
-def existing_ids_by_key(conn: sqlite3.Connection) -> Dict[Tuple[str, ...], deque]:
+def existing_ids_by_key(
+    conn: sqlite3.Connection, profile_id: int
+) -> Dict[Tuple[str, ...], deque]:
     """Map each duplicate key to the ids of the rows already stored under it.
+
+    Scoped to one profile: two people sharing the database will legitimately
+    have their own copy of the same rent payment, and neither should suppress
+    the other's.
 
     Ids are queued in insertion order so that repeated occurrences of the same
     key are matched one-for-one: a file containing two identical same-day
@@ -174,7 +181,10 @@ def existing_ids_by_key(conn: sqlite3.Connection) -> Dict[Tuple[str, ...], deque
     into one.
     """
     columns = ", ".join(DUPLICATE_KEY_COLUMNS)
-    cursor = conn.execute(f"SELECT id, {columns} FROM transactions ORDER BY id")
+    cursor = conn.execute(
+        f"SELECT id, {columns} FROM transactions WHERE profile_id = ? ORDER BY id",
+        (profile_id,),
+    )
 
     ids: Dict[Tuple[str, ...], deque] = defaultdict(deque)
     for row in cursor.fetchall():
@@ -184,10 +194,18 @@ def existing_ids_by_key(conn: sqlite3.Connection) -> Dict[Tuple[str, ...], deque
     return ids
 
 
-def load_csv_to_db(csv_path: str, override_existing: bool = False) -> LoadResult:
-    """Load a CSV into the transactions table without discarding what's there.
+def load_csv_to_db(
+    csv_path: str,
+    override_existing: bool = False,
+    profile_id: Optional[int] = None,
+) -> LoadResult:
+    """Load a CSV into one profile's transactions without discarding what's there.
 
-    A row whose date and description already exist in the database is left
+    Every row is written with the given profile_id, and duplicate detection
+    only looks at that profile — uploading the same statement under two
+    profiles keeps two independent copies.
+
+    A row whose date and description already exist in the profile is left
     alone, so only genuinely new transactions are added. Existing rows are
     never deleted; edits made in the app (category, reimbursed flag) therefore
     survive re-uploading an overlapping statement.
@@ -195,13 +213,15 @@ def load_csv_to_db(csv_path: str, override_existing: bool = False) -> LoadResult
     When override_existing is true, matching rows are updated in place from the
     CSV instead of being skipped. Only the columns the CSV actually provides
     are written, so an export missing an optional column won't blank it out.
+    A row never changes profile this way: profile_id is left out of the update.
     """
     df = read_transactions_csv(csv_path)
     columns: List[str] = list(df.columns)
 
+    insert_columns = columns + ["profile_id"]
     insert_sql = (
-        f"INSERT INTO transactions ({', '.join(columns)}) "
-        f"VALUES ({', '.join('?' for _ in columns)})"
+        f"INSERT INTO transactions ({', '.join(insert_columns)}) "
+        f"VALUES ({', '.join('?' for _ in insert_columns)})"
     )
     update_sql = (
         f"UPDATE transactions SET {', '.join(f'{col} = ?' for col in columns)} "
@@ -210,9 +230,11 @@ def load_csv_to_db(csv_path: str, override_existing: bool = False) -> LoadResult
 
     inserted = updated = skipped = 0
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     try:
-        pending_ids = existing_ids_by_key(conn)
+        # Falls back to the default profile so a bare /load-csv still works
+        target_profile_id = resolve_target_profile_id(conn, profile_id)
+        pending_ids = existing_ids_by_key(conn, target_profile_id)
 
         for record in df.to_dict(orient="records"):
             values = [to_sql_value(record.get(col)) for col in columns]
@@ -228,7 +250,7 @@ def load_csv_to_db(csv_path: str, override_existing: bool = False) -> LoadResult
                     skipped += 1
                 continue
 
-            conn.execute(insert_sql, values)
+            conn.execute(insert_sql, values + [target_profile_id])
             inserted += 1
 
         conn.commit()

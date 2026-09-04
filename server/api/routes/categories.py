@@ -2,7 +2,8 @@ import sqlite3
 from fastapi import APIRouter, Query
 from typing import Optional
 
-from core.config import DB_PATH
+from db.database import connect
+from db.filters import TransactionFilters
 from models.enums import Category, TransactionType
 
 router = APIRouter()
@@ -10,30 +11,25 @@ router = APIRouter()
 
 @router.get("/categories")
 async def get_categories(
+        profile_id: Optional[int] = Query(
+            None,
+            description="Only count transactions in this profile. Omit for every profile.",
+        ),
         start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
         end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
         transaction_type: TransactionType = Query(TransactionType.DEBIT, description="Filter by transaction type"),
 ):
-    conn = sqlite3.connect(DB_PATH)
+    # No category filter here — the whole point is to group by it — so that
+    # field is left unset and its condition drops out
+    where_clause, params = TransactionFilters(
+        profile_id=profile_id,
+        start_date=start_date,
+        end_date=end_date,
+        transaction_type=transaction_type,
+    ).where()
+
+    conn = connect()
     cursor = conn.cursor()
-
-    where_conditions = []
-    params = []
-
-    if start_date:
-        where_conditions.append("transaction_date >= ?")
-        params.append(start_date)
-
-    if end_date:
-        where_conditions.append("transaction_date <= ?")
-        params.append(end_date)
-
-    if transaction_type == TransactionType.DEBIT:
-        where_conditions.append("cad_amount < 0")
-    elif transaction_type == TransactionType.CREDIT:
-        where_conditions.append("cad_amount > 0")
-
-    where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
     cursor.execute(
         f"""

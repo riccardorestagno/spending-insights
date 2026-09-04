@@ -11,8 +11,22 @@ export enum SortOrder {
   Descending = 'desc'
 }
 
+/**
+ * A named bucket of transactions, so several people can share one database.
+ *
+ * The name lives on the profile rather than on each transaction, which is what
+ * makes renaming free: transactions only ever store the profile's id.
+ */
+export interface Profile {
+  id: number;
+  name: string;
+  created_at?: string;
+  transaction_count: number;
+}
+
 export interface Transaction {
   id: string | number;
+  profile_id?: number;
   transaction_date: string;
   description_1: string;
   description_2?: string;
@@ -34,6 +48,7 @@ export interface Metadata {
   total_pages: number;
   total_items: number;
   category_total: number;
+  profile_id?: number | null;
 }
 
 export interface FilterProps {

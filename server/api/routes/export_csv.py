@@ -7,7 +7,9 @@ from typing import List, Optional, Tuple
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from core.config import DB_PATH
+from db.database import connect
+from db.filters import TransactionFilters, TransactionSort
+from db.profiles import ProfileNotFound, get_profile
 from models.enums import Category, SortBy, SortOrder, TransactionType
 
 router = APIRouter()
@@ -38,43 +40,20 @@ def format_value(column: str, value) -> str:
     return "" if value is None else value
 
 
-def build_filters(
-    category: Optional[str],
-    start_date: Optional[str],
-    end_date: Optional[str],
-    transaction_type: TransactionType,
-) -> Tuple[str, list]:
-    """Mirrors the filtering in /transactions so an export matches what's on screen."""
-    conditions: List[str] = []
-    params: list = []
-
-    if category and category != Category.ALL:
-        conditions.append("category = ?")
-        params.append(category)
-
-    if start_date:
-        conditions.append("transaction_date >= ?")
-        params.append(start_date)
-
-    if end_date:
-        conditions.append("transaction_date <= ?")
-        params.append(end_date)
-
-    if transaction_type == TransactionType.DEBIT:
-        conditions.append("cad_amount < 0")
-    elif transaction_type == TransactionType.CREDIT:
-        conditions.append("cad_amount > 0")
-
-    return (" AND ".join(conditions) if conditions else "1=1"), params
-
-
 def build_filename(
     category: Optional[str],
     start_date: Optional[str],
     end_date: Optional[str],
     transaction_type: TransactionType,
+    profile_name: Optional[str] = None,
 ) -> str:
-    parts = ["transactions", transaction_type.value]
+    parts = ["transactions"]
+
+    # Leads the name so exports from different profiles sort together per person
+    if profile_name:
+        parts.append(profile_name)
+
+    parts.append(transaction_type.value)
 
     if category and category != Category.ALL:
         parts.append(category)
@@ -95,6 +74,10 @@ def build_filename(
 @router.get("/export-csv")
 async def export_csv(
     category: Optional[str] = Query(None, description="Category to filter by"),
+    profile_id: Optional[int] = Query(
+        None,
+        description="Only export transactions in this profile. Omit for every profile.",
+    ),
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     transaction_type: TransactionType = Query(
@@ -103,22 +86,40 @@ async def export_csv(
     sort_by: SortBy = Query(SortBy.DATE, description="Sort by date or amount"),
     sort_order: SortOrder = Query(SortOrder.DESCENDING, description="Sort order"),
 ):
-    """Export every transaction matching the filters — no pagination applied."""
-    where_clause, params = build_filters(category, start_date, end_date, transaction_type)
+    """Export every transaction matching the filters — no pagination applied.
+    The export is scoped to a single profile whenever the caller passes one,
+    so what lands in the file is exactly what the app is showing.
+    """
+    where_clause, params = TransactionFilters(
+        profile_id=profile_id,
+        category=category,
+        start_date=start_date,
+        end_date=end_date,
+        transaction_type=transaction_type
+    ).where()
+    order_clause = TransactionSort(sort_by, sort_order).order_by()
 
     sort_column = "transaction_date" if sort_by == SortBy.DATE else "cad_amount"
     direction = "ASC" if sort_order == SortOrder.ASCENDING else "DESC"
 
-    conn = sqlite3.connect(DB_PATH)
+    profile_name: Optional[str] = None
+
+    conn = connect()
     conn.row_factory = sqlite3.Row
     try:
+        if profile_id is not None:
+            try:
+                profile_name = get_profile(conn, profile_id)["name"]
+            except ProfileNotFound as e:
+                raise HTTPException(status_code=404, detail=str(e))
+
         cursor = conn.cursor()
         cursor.execute(
             f"""
             SELECT {", ".join(column for column, _ in CSV_COLUMNS)}
             FROM transactions
             WHERE {where_clause}
-            ORDER BY {sort_column} {direction}
+            ORDER BY {order_clause}
             """,
             params,
         )
@@ -139,7 +140,9 @@ async def export_csv(
             [format_value(column, row[column]) for column, _ in CSV_COLUMNS]
         )
 
-    filename = build_filename(category, start_date, end_date, transaction_type)
+    filename = build_filename(
+        category, start_date, end_date, transaction_type, profile_name
+    )
 
     return StreamingResponse(
         # Leading BOM so Excel reads accented merchant names correctly

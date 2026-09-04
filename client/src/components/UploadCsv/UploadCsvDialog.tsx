@@ -1,19 +1,37 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FileText, Upload } from 'lucide-react';
+import { Profile } from '../TransactionViewer/types';
+
+/** Where an upload should land: an existing profile, or one to be created. */
+export type UploadTarget =
+  | { profileId: number; profileName?: undefined }
+  | { profileId?: undefined; profileName: string };
 
 interface UploadCsvDialogProps {
   open: boolean;
   uploading: boolean;
   /** Surfaced inside the dialog so a failed upload keeps the chosen options. */
   error?: string | null;
+  profiles: Profile[];
+  /** Pre-selected so the common case is upload-into-what-I'm-looking-at. */
+  activeProfileId: number | null;
   onCancel: () => void;
-  onConfirm: (file: File, overrideExisting: boolean) => void;
+  onConfirm: (
+    file: File,
+    overrideExisting: boolean,
+    target: UploadTarget
+  ) => void;
 }
+
+// Sentinel for the "create one" row in the profile dropdown
+const NEW_PROFILE = 'new';
 
 export const UploadCsvDialog: React.FC<UploadCsvDialogProps> = ({
   open,
   uploading,
   error,
+  profiles,
+  activeProfileId,
   onCancel,
   onConfirm,
 }) => {
@@ -22,17 +40,31 @@ export const UploadCsvDialog: React.FC<UploadCsvDialogProps> = ({
   const [file, setFile] = useState<File | null>(null);
   const [overrideExisting, setOverrideExisting] = useState<boolean>(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [selection, setSelection] = useState<string>(NEW_PROFILE);
+  const [newProfileName, setNewProfileName] = useState<string>('');
 
   // Reset every time the dialog opens so the override checkbox always starts
   // off — it should never be inherited from a previous upload.
   useEffect(() => {
-    if (open) {
-      setFile(null);
-      setOverrideExisting(false);
-      setFileError(null);
-      chooseButtonRef.current?.focus();
-    }
-  }, [open]);
+    if (!open) return;
+
+    setFile(null);
+    setOverrideExisting(false);
+    setFileError(null);
+    setNewProfileName('');
+
+    // With no profiles at all there's nothing to pick, so the dialog opens
+    // straight into naming the first one.
+    const hasProfiles = profiles.length > 0;
+    const preselected =
+      activeProfileId !== null &&
+      profiles.some((profile) => profile.id === activeProfileId)
+        ? activeProfileId
+        : profiles[0]?.id;
+
+    setSelection(hasProfiles ? String(preselected) : NEW_PROFILE);
+    chooseButtonRef.current?.focus();
+  }, [open, profiles, activeProfileId]);
 
   useEffect(() => {
     if (!open) return;
@@ -46,6 +78,8 @@ export const UploadCsvDialog: React.FC<UploadCsvDialogProps> = ({
   }, [open, uploading, onCancel]);
 
   if (!open) return null;
+
+  const creatingProfile = selection === NEW_PROFILE;
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] ?? null;
@@ -71,7 +105,18 @@ export const UploadCsvDialog: React.FC<UploadCsvDialogProps> = ({
       setFileError('Choose a CSV file first.');
       return;
     }
-    onConfirm(file, overrideExisting);
+
+    if (creatingProfile) {
+      const name = newProfileName.trim();
+      if (!name) {
+        setFileError('Name the new profile before uploading.');
+        return;
+      }
+      onConfirm(file, overrideExisting, { profileName: name });
+      return;
+    }
+
+    onConfirm(file, overrideExisting, { profileId: Number(selection) });
   };
 
   return (
@@ -95,10 +140,54 @@ export const UploadCsvDialog: React.FC<UploadCsvDialogProps> = ({
         </h2>
 
         <p id="upload-csv-description" className="mt-2 text-sm text-gray-600">
-          Only transactions that aren't already in your database will be added.
-          Any transaction whose date and description match an existing one is
-          left untouched.
+          Transactions are added to the profile you pick below. Any transaction
+          whose date and description match one already in that profile is left
+          untouched.
         </p>
+
+        <div className="mt-4">
+          <label
+            htmlFor="upload-profile"
+            className="block text-sm font-medium text-gray-700"
+          >
+            Upload into
+          </label>
+
+          <select
+            id="upload-profile"
+            value={selection}
+            onChange={(event) => {
+              setSelection(event.target.value);
+              setFileError(null);
+            }}
+            disabled={uploading}
+            className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {profiles.map((profile) => (
+              <option key={profile.id} value={String(profile.id)}>
+                {profile.name} ({profile.transaction_count} transactions)
+              </option>
+            ))}
+            <option value={NEW_PROFILE}>
+              {profiles.length === 0
+                ? 'Create your first profile…'
+                : 'Create a new profile…'}
+            </option>
+          </select>
+
+          {creatingProfile && (
+            <input
+              type="text"
+              value={newProfileName}
+              maxLength={60}
+              onChange={(event) => setNewProfileName(event.target.value)}
+              disabled={uploading}
+              placeholder="Profile name, e.g. Alex"
+              aria-label="New profile name"
+              className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          )}
+        </div>
 
         <div className="mt-4">
           <input
@@ -141,9 +230,9 @@ export const UploadCsvDialog: React.FC<UploadCsvDialogProps> = ({
         {overrideExisting && (
           <p className="mt-2 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
             <strong className="font-semibold">Warning:</strong> matching
-            transactions will be replaced with the values from this file,
-            permanently discarding any category or reimbursement edits you've
-            made to them.
+            transactions in this profile will be replaced with the values from
+            this file, permanently discarding any category or reimbursement
+            edits you've made to them. Other profiles are untouched.
           </p>
         )}
 

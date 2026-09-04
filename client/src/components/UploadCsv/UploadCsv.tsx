@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Upload } from 'lucide-react';
 import { API_BASE_URL } from '../../utils/constants';
-import { UploadCsvDialog } from './UploadCsvDialog';
+import { readDetail } from '../../utils/api';
+import { useProfileContext } from '../../contexts/ProfileContext';
+import { UploadCsvDialog, UploadTarget } from './UploadCsvDialog';
 
 interface UploadCsvProps {
   /** Called after a successful upload so the caller can refetch data. */
@@ -13,47 +15,38 @@ interface Status {
   message: string;
 }
 
-/** FastAPI returns `detail` as a string for HTTPException, but as an array of
- *  error objects for request-validation failures. Normalize both. */
-const readDetail = (payload: unknown, fallback: string): string => {
-  if (payload && typeof payload === 'object' && 'detail' in payload) {
-    const detail = (payload as { detail: unknown }).detail;
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((item) =>
-          item && typeof item === 'object' && 'msg' in item
-            ? String((item as { msg: unknown }).msg)
-            : String(item)
-        )
-        .join('; ');
-    }
-  }
-  return fallback;
-};
-
-/** Turn the server's per-row counts into one line for the button's status. */
-const summarize = (payload: {
+interface UploadResponse {
   filename?: string;
   inserted?: number;
   updated?: number;
   skipped?: number;
-}): string => {
+  profile?: { id: number; name: string };
+}
+
+/** Turn the server's per-row counts into one line for the button's status. */
+const summarize = (payload: UploadResponse): string => {
   const parts = [`${payload.inserted ?? 0} added`];
 
   if (payload.updated) parts.push(`${payload.updated} overridden`);
   if (payload.skipped) parts.push(`${payload.skipped} skipped as duplicates`);
 
-  return `Uploaded ${payload.filename ?? 'file'} — ${parts.join(', ')}`;
+  const target = payload.profile ? ` to ${payload.profile.name}` : '';
+
+  return `Uploaded ${payload.filename ?? 'file'}${target} — ${parts.join(', ')}`;
 };
 
 export const UploadCsv: React.FC<UploadCsvProps> = ({ onUploaded }) => {
+  const { profiles, activeProfileId, refresh } = useProfileContext();
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
 
-  const handleUpload = async (file: File, overrideExisting: boolean) => {
+  const handleUpload = async (
+    file: File,
+    overrideExisting: boolean,
+    target: UploadTarget
+  ) => {
     setUploading(true);
     setDialogError(null);
     setStatus(null);
@@ -64,20 +57,33 @@ export const UploadCsv: React.FC<UploadCsvProps> = ({ onUploaded }) => {
       // FormData has no booleans; FastAPI parses these strings into bool
       formData.append('override_existing', overrideExisting ? 'true' : 'false');
 
+      // Exactly one of these is sent: an id loads into an existing profile, a
+      // name creates one (or reuses a profile already called that).
+      if (target.profileId !== undefined) {
+        formData.append('profile_id', String(target.profileId));
+      } else {
+        formData.append('profile_name', target.profileName);
+      }
+
       const response = await fetch(`${API_BASE_URL}/upload-csv`, {
         method: 'POST',
         body: formData,
       });
 
-      const payload = await response.json().catch(() => null);
+      const payload: UploadResponse | null = await response
+        .json()
+        .catch(() => null);
 
       if (!response.ok) {
         throw new Error(readDetail(payload, `Upload failed (${response.status})`));
       }
 
-      setStatus({ type: 'success', message: summarize(payload) });
+      setStatus({ type: 'success', message: summarize(payload ?? {}) });
       setDialogOpen(false);
 
+      // Pull in the new counts and switch to whichever profile received the
+      // file, so the upload is immediately visible.
+      await refresh(payload?.profile?.id);
       onUploaded?.();
     } catch (err) {
       // Keep the dialog open so the file and checkbox survive a retry
@@ -120,6 +126,8 @@ export const UploadCsv: React.FC<UploadCsvProps> = ({ onUploaded }) => {
         open={dialogOpen}
         uploading={uploading}
         error={dialogError}
+        profiles={profiles}
+        activeProfileId={activeProfileId}
         onCancel={() => setDialogOpen(false)}
         onConfirm={handleUpload}
       />

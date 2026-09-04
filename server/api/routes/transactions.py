@@ -3,9 +3,10 @@ import sqlite3
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 
+from db.filters import TransactionFilters, TransactionSort
 from models.enums import Category, TransactionType, SortBy, SortOrder, CategoryOut
 from schemas.transaction import Transaction, PaginatedResponse
-from core.config import DB_PATH
+from db.database import connect
 
 router = APIRouter()
 
@@ -14,7 +15,7 @@ router = APIRouter()
 TRANSACTION_COLUMNS = """
     id, account_type, account_number, transaction_date,
     cheque_number, description_1, description_2,
-    cad_amount, usd_amount, category, is_reimbursed
+    cad_amount, usd_amount, category, is_reimbursed, profile_id
 """
 
 
@@ -27,6 +28,10 @@ def to_transaction(row) -> Transaction:
 @router.get("/transactions", response_model=PaginatedResponse)
 async def get_transactions(
         category: Optional[str] = Query(None, description="Category to filter by"),
+        profile_id: Optional[int] = Query(
+            None,
+            description="Only return transactions in this profile. Omit for every profile.",
+        ),
         page: int = Query(1, ge=1),
         page_size: int = Query(10, ge=1, le=10000000),
         start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
@@ -35,34 +40,18 @@ async def get_transactions(
         sort_by: SortBy = Query(SortBy.DATE, description="Sort by date or amount"),
         sort_order: SortOrder = Query(SortOrder.DESCENDING, description="Sort order"),
 ):
-    conn = sqlite3.connect(DB_PATH)
+    filters = TransactionFilters(
+        profile_id=profile_id,
+        category=category,
+        start_date=start_date,
+        end_date=end_date,
+        transaction_type=transaction_type,
+    )
+    where_clause, params = filters.where()
+
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-
-    # Build WHERE clause with optional category, date, and transaction type filters
-    where_conditions = []
-    params = []
-
-    if category and category != Category.ALL:
-        where_conditions.append("category = ?")
-        params.append(category)
-
-    if start_date:
-        where_conditions.append("transaction_date >= ?")
-        params.append(start_date)
-
-    if end_date:
-        where_conditions.append("transaction_date <= ?")
-        params.append(end_date)
-
-    if transaction_type == TransactionType.DEBIT:
-        where_conditions.append("cad_amount < 0")
-    elif transaction_type == TransactionType.CREDIT:
-        where_conditions.append("cad_amount > 0")
-    # If "all", no condition is added
-
-    # Build WHERE clause or use "1=1" if no conditions
-    where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
     # Get count and total with filters
     cursor.execute(
@@ -75,17 +64,11 @@ async def get_transactions(
 
     if total_items == 0:
         conn.close()
-        filter_desc = []
-        if category:
-            filter_desc.append(f"category: {category}")
-        if transaction_type != TransactionType.ALL:
-            filter_desc.append(f"transaction type: {transaction_type}")
-        if start_date or end_date:
-            filter_desc.append("the given date range")
 
+        applied = filters.describe()
         detail = "No transactions found"
-        if filter_desc:
-            detail += f" for {' with '.join(filter_desc)}"
+        if applied:
+            detail += f" for {applied}"
 
         raise HTTPException(status_code=404, detail=detail)
 
@@ -93,9 +76,7 @@ async def get_transactions(
     offset = (page - 1) * page_size
 
     # Build ORDER BY clause
-    sort_column = "transaction_date" if sort_by == SortBy.DATE else "cad_amount"
-    order_direction = "ASC" if sort_order == SortOrder.ASCENDING else "DESC"
-    order_clause = f"{sort_column} {order_direction}"
+    order_clause = TransactionSort(sort_by, sort_order).order_by()
 
     # Get paginated transactions with filters and sorting
     cursor.execute(
@@ -123,6 +104,7 @@ async def get_transactions(
             "total_items": total_items,
             "category_total": round(category_total, 2),
             "category": category,
+            "profile_id": profile_id,
             "start_date": start_date,
             "end_date": end_date,
             "transaction_type": transaction_type,
@@ -140,7 +122,7 @@ async def update_transaction_category(
     if category == Category.ALL:
         raise HTTPException(status_code=400, detail="Cannot set a transaction to this category")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -175,7 +157,7 @@ async def update_transaction_reimbursed(
         transaction_id: int,
         is_reimbursed: bool = Query(..., description="Whether this transaction has been reimbursed"),
 ):
-    conn = sqlite3.connect(DB_PATH)
+    conn = connect()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 

@@ -5,6 +5,8 @@ import { SortOrder, TransactionType } from '../TransactionViewer/types';
 
 /** The filters currently applied in the viewer, forwarded to the export. */
 export interface ExportFilters {
+  /** Exports never span profiles: only this one's transactions are written. */
+  profileId: number | null;
   transactionType: TransactionType;
   category: string;
   startDate: string;
@@ -30,7 +32,8 @@ export const ExportCsv: React.FC<ExportCsvProps> = ({ filters, totalItems }) => 
   const [exporting, setExporting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isEmpty = totalItems === 0;
+  // Nothing selected means nothing to scope the export to
+  const isEmpty = totalItems === 0 || filters.profileId === null;
 
   const handleExport = async () => {
     setExporting(true);
@@ -45,6 +48,9 @@ export const ExportCsv: React.FC<ExportCsvProps> = ({ filters, totalItems }) => 
         sort_order: filters.sortOrder,
       });
 
+      if (filters.profileId !== null) {
+        params.set('profile_id', String(filters.profileId));
+      }
       if (filters.category) params.set('category', filters.category);
       if (filters.startDate) params.set('start_date', filters.startDate);
       if (filters.endDate) params.set('end_date', filters.endDate);
@@ -97,7 +103,13 @@ export const ExportCsv: React.FC<ExportCsvProps> = ({ filters, totalItems }) => 
         type="button"
         onClick={handleExport}
         disabled={exporting || isEmpty}
-        title={isEmpty ? 'Nothing to export with the current filters' : undefined}
+        title={
+          filters.profileId === null
+            ? 'Select a profile to export'
+            : isEmpty
+              ? 'Nothing to export with the current filters'
+              : 'Exports only the profile you are viewing'
+        }
         className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <Download size={16} aria-hidden="true" />
