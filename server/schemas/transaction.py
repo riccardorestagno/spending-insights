@@ -16,6 +16,8 @@ class Transaction(BaseModel):
     usd_amount: Optional[float]
     category: CategoryOut
     is_reimbursed: bool = False
+    # Nullable only for rows that predate profiles and haven't been adopted yet
+    profile_id: Optional[int] = None
 
 
 class PaginatedResponse(BaseModel):

@@ -4,8 +4,12 @@ import { useState, useEffect } from 'react';
 import { Category } from './components/TransactionViewer/types';
 import { API_BASE_URL } from './utils/constants';
 import { DEFAULT_PRESET, resolvePreset } from './utils/dateRanges';
+import { ProfileProvider, useProfileContext } from './contexts/ProfileContext';
 
-function App() {
+function Dashboard() {
+  // Which profile is on screen is shared state, so it lives in context rather
+  // than being passed down through the viewer and the panel separately.
+  const { activeProfileId } = useProfileContext();
   const [categories, setCategories] = useState<Category[]>([]);
   // Seeded from the same preset the viewer defaults to. Starting empty meant
   // the chart fired an unfiltered request on mount, which could resolve after
@@ -21,14 +25,27 @@ function App() {
 
   useEffect(() => {
     fetchCategories();
-  }, [reloadKey]);
+  }, [reloadKey, activeProfileId]);
+
+  // The previous profile's categories don't apply to the new one
+  useEffect(() => {
+    setSelectedCategory('All');
+  }, [activeProfileId]);
 
   const fetchCategories = async () => {
+    if (activeProfileId === null) {
+      setCategories([]);
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_BASE_URL}/categories`);
+      const response = await fetch(
+        `${API_BASE_URL}/categories?profile_id=${activeProfileId}`
+      );
       if (response.ok) {
         const data = await response.json();
-        setCategories(data);
+        // The endpoint wraps the list, so reach inside it before storing
+        setCategories(data.categories ?? []);
       }
     } catch (error) {
       console.error('Failed to fetch categories:', error);
@@ -75,6 +92,14 @@ function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ProfileProvider>
+      <Dashboard />
+    </ProfileProvider>
   );
 }
 
