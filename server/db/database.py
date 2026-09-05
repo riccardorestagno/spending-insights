@@ -49,6 +49,9 @@ def init_db():
             usd_amount REAL,
             category TEXT,
             is_reimbursed INTEGER NOT NULL DEFAULT 0,
+            -- Free-text note. NULL rather than "" when absent, so "has a
+            -- comment" is a single unambiguous check everywhere.
+            comment TEXT,
             profile_id INTEGER REFERENCES profiles(id)
         )
     """)
@@ -80,6 +83,10 @@ def run_migrations(cursor: sqlite3.Cursor) -> None:
         cursor.execute(
             "ALTER TABLE transactions ADD COLUMN is_reimbursed INTEGER NOT NULL DEFAULT 0"
         )
+
+    if "comment" not in existing_columns:
+        # No DEFAULT, so every existing row comes out NULL — i.e. uncommented
+        cursor.execute("ALTER TABLE transactions ADD COLUMN comment TEXT")
 
     if "profile_id" not in existing_columns:
         # No DEFAULT, so existing rows come out NULL and are adopted below

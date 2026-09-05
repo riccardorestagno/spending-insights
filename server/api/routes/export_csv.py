@@ -27,6 +27,7 @@ CSV_COLUMNS: List[Tuple[str, str]] = [
     ("usd_amount", "USD$"),
     ("category", "Category"),
     ("is_reimbursed", "Is Reimbursed"),
+    ("comment", "Comment"),
 ]
 
 # Columns stored as 0/1 in SQLite but written as true/false so the file stays

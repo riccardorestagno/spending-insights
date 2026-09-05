@@ -14,6 +14,7 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
   currentPage,
   onPageChange,
   categories,
+  onCommentChange,
 }) => {
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -48,6 +49,7 @@ export const TransactionsTable: React.FC<TransactionsTableProps> = ({
                     onReimbursedUpdate={(id, isReimbursed) => {
                       console.log(`Updated transaction ${id} reimbursed to ${isReimbursed}`);
                     }}
+                    onCommentChange={onCommentChange}
                   />
                 ))}
               </tbody>

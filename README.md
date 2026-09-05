@@ -119,6 +119,36 @@ Several people can share one database. Every transaction belongs to exactly one
 Existing databases are migrated automatically on startup: transactions loaded
 before profiles existed are moved into a profile called `Default`.
 
+## Transaction notes
+
+Any transaction can carry a free-text note — what a vague merchant name
+actually was, who owes you for it, which trip it belonged to.
+
+  - **Read**: hover anywhere on a row and its note appears beside it.
+  - **Write**: click the note icon in the **Note** column. Rows without a note
+    show the icon on hover, so the table stays uncluttered.
+  - **Edit**: click the icon again. `Ctrl`/`⌘` + `Enter` saves, `Esc` cancels,
+    and clicking away saves rather than discarding what you typed.
+  - **Delete**: use **Delete** in the note editor, or clear the text and save.
+
+Notes are capped at 1000 characters and stored per transaction, so they follow
+the transaction between filters, sorts and pages.
+
+Notes survive re-uploads the same way category and reimbursement edits do: a
+skipped duplicate keeps its note, and an override only replaces the note when
+the CSV actually has a `Comment` column. **Export CSV** includes that column,
+so exporting and re-uploading round-trips notes intact.
+
+### Note endpoints
+
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| PATCH | `/transactions/{id}/comment` | Set a note — `{"comment": "Split with Sam"}` |
+| DELETE | `/transactions/{id}/comment` | Remove a note |
+
+Sending blank or whitespace-only text to the PATCH endpoint clears the note, so
+it's stored as `NULL` rather than an empty string.
+
 ### Profile endpoints
 
 | Method | Path | Purpose |
@@ -143,6 +173,8 @@ does.
   - **Sortable Columns**: Click "Date" or "Amount" headers to sort (ascending/descending)
   - **Pagination**: Browse large datasets with adjustable page sizes (10-100 items)
   - **Category Totals**: See total spending per category
+  - **Transaction Notes**: Attach a free-text note to any transaction. Hover a
+    row to read it, click the note icon to write, edit or delete it
   - **Non-destructive Uploads**: Re-upload overlapping statements without
     duplicating transactions or losing your edits
   - **Per-profile Export**: Download exactly the profile you're viewing

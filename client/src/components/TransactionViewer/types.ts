@@ -34,6 +34,8 @@ export interface Transaction {
   cad_amount: number;
   category: Category;
   is_reimbursed: boolean;
+  /** Free-text note. null (never '') when the transaction has none. */
+  comment?: string | null;
 }
 
 export interface Category {
@@ -94,6 +96,10 @@ export interface TransactionsTableProps {
   currentPage: number;
   onPageChange: (page: number) => void;
   categories: Category[];
+  onCommentChange?: (
+    transactionId: string | number,
+    comment: string | null
+  ) => void;
 }
 
 export interface CategorySummaryProps {

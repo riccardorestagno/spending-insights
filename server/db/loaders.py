@@ -72,6 +72,7 @@ ALL_COLUMNS = (
     "usd_amount",
     "category",
     "is_reimbursed",
+    "comment",
 )
 
 COLUMN_RENAMES = {
@@ -85,6 +86,7 @@ COLUMN_RENAMES = {
     "USD$": "usd_amount",
     "Category": "category",
     "Is Reimbursed": "is_reimbursed",
+    "Comment": "comment",
 }
 
 REQUIRED_CSV_COLUMNS = (

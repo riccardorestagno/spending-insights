@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { TransactionRowProps, Category } from './types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { API_BASE_URL } from '../../utils/constants';
+import { TransactionComment } from './TransactionComment';
 
 interface EditableTransactionRowProps extends TransactionRowProps {
   categories: Category[];
   isEditMode: boolean;
   onCategoryUpdate?: (transactionId: string | number, newCategory: Category) => void;
   onReimbursedUpdate?: (transactionId: string | number, isReimbursed: boolean) => void;
+  onCommentChange?: (transactionId: string | number, comment: string | null) => void;
 }
 
 export const TransactionRow: React.FC<EditableTransactionRowProps> = ({ 
@@ -15,7 +17,8 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
   categories,
   isEditMode,
   onCategoryUpdate,
-  onReimbursedUpdate
+  onReimbursedUpdate,
+  onCommentChange
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<Category>(transaction.category);
   const [isReimbursed, setIsReimbursed] = useState<boolean>(transaction.is_reimbursed);
@@ -23,6 +26,8 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
   const [isTogglingReimbursed, setIsTogglingReimbursed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reimbursedError, setReimbursedError] = useState<string | null>(null);
+  // Drives the note tooltip and reveals the add-note button on empty rows.
+  const [isHovered, setIsHovered] = useState(false);
 
   // React reuses this component when a row keeps its id across a refetch, so
   // local state has to follow the props or a reload shows stale values.
@@ -104,7 +109,11 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
   };
 
   return (
-    <tr className="hover:bg-gray-50">
+    <tr
+      className="hover:bg-gray-50"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
         {formatDate(transaction.transaction_date)}
       </td>
@@ -160,6 +169,15 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
             </div>
           )}
         </div>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+        <TransactionComment
+          transactionId={transaction.id}
+          description={transaction.description_1}
+          comment={transaction.comment ?? null}
+          isRowHovered={isHovered}
+          onCommentChange={onCommentChange}
+        />
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
         <span className={transaction.cad_amount < 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
