@@ -6,7 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquarePlus, MessageSquareText } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { API_BASE_URL } from '../../utils/constants';
 
 /** Matches MAX_COMMENT_LENGTH on the server, which rejects anything longer. */
@@ -26,10 +26,10 @@ interface Point {
  * Position a portalled element next to its anchor, in viewport coordinates.
  *
  * The table scrolls inside `overflow-x-auto`, which clips absolutely
- * positioned children, so both the tooltip and the editor are rendered into
- * document.body instead and placed by hand. Preferring below the anchor, it
- * flips above when the space isn't there and clamps to the viewport either
- * way, so a note on the last visible row is still fully readable.
+ * positioned children, so the editor popover is rendered into document.body
+ * instead and placed by hand. Preferring below the anchor, it flips above
+ * when the space isn't there and clamps to the viewport either way, so a
+ * note on the last visible row is still fully editable.
  */
 const useAnchoredPosition = (
   isOpen: boolean,
@@ -92,24 +92,82 @@ const useAnchoredPosition = (
   return position;
 };
 
+/**
+ * Position a portalled element so its right edge lands on a zero-size
+ * anchor point, vertically centered on it, recalculating whenever
+ * `recalcKey` changes (e.g. the trigger's own text changed size).
+ */
+const useAnchoredEdge = (
+  anchorRef: React.RefObject<HTMLElement | null>,
+  floatingRef: React.RefObject<HTMLElement | null>,
+  recalcKey: unknown
+): Point | null => {
+  const [position, setPosition] = useState<Point | null>(null);
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const anchor = anchorRef.current;
+      const floating = floatingRef.current;
+      if (!anchor || !floating) return;
+
+      const a = anchor.getBoundingClientRect();
+      const { width, height } = floating.getBoundingClientRect();
+
+      const top = a.top - height / 2;
+      const left = a.left - width;
+
+      setPosition((prev) =>
+        prev && prev.top === top && prev.left === left ? prev : { top, left }
+      );
+    };
+
+    place();
+
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [anchorRef, floatingRef, recalcKey]);
+
+  return position;
+};
+
 export interface TransactionCommentProps {
   transactionId: string | number;
   /** Used to label the control, so screen readers get "Add a note to METRO". */
   description: string;
   comment: string | null;
-  /** True while the pointer is anywhere on the row, which reveals the note. */
-  isRowHovered: boolean;
+  /** True while the pointer is over the trigger's anchor (e.g. the description
+   * cell), which reveals the control. Scope this to just that element, not
+   * the whole row — otherwise the control shows for unrelated hovers. */
+  isHovered: boolean;
   onCommentChange?: (
     transactionId: string | number,
     comment: string | null
   ) => void;
 }
 
+/**
+ * Meant to render inside a `relative` cell, overlaying its right edge rather
+ * than taking up space in it. With no note, a faint "+" fades in on hover to
+ * add one; with a note, the note text itself fades in instead of an icon.
+ *
+ * The visible trigger is rendered into `document.body` via a fixed-position
+ * portal rather than positioned in place. A zero-size anchor marks where it
+ * should appear, but the anchor's ancestor cell sits inside the table's
+ * `overflow-x-auto` wrapper — anything actually painted inside that
+ * subtree, even absolutely positioned and even fully contained within its
+ * own cell, still counts toward that wrapper's scrollable width. Portalling
+ * the real content out of the table entirely avoids that regardless of how
+ * it's positioned.
+ */
 export const TransactionComment: React.FC<TransactionCommentProps> = ({
   transactionId,
   description,
   comment,
-  isRowHovered,
+  isHovered,
   onCommentChange,
 }) => {
   const [saved, setSaved] = useState<string | null>(comment ?? null);
@@ -117,11 +175,10 @@ export const TransactionComment: React.FC<TransactionCommentProps> = ({
   const [draft, setDraft] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isButtonHovered, setIsButtonHovered] = useState(false);
 
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const hasComment = saved !== null;
@@ -137,7 +194,7 @@ export const TransactionComment: React.FC<TransactionCommentProps> = ({
     setError(null);
     // Only when the user asked to close. On a click-away the focus belongs to
     // whatever they clicked, and yanking it back here would fight them.
-    if (restoreFocus) buttonRef.current?.focus();
+    if (restoreFocus) triggerRef.current?.focus();
   }, []);
 
   const persist = useCallback(
@@ -207,7 +264,7 @@ export const TransactionComment: React.FC<TransactionCommentProps> = ({
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (popoverRef.current?.contains(target)) return;
-      if (buttonRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
       persist(draft, false);
     };
 
@@ -227,67 +284,77 @@ export const TransactionComment: React.FC<TransactionCommentProps> = ({
     }
   };
 
-  const showTooltip =
-    !isEditing && hasComment && (isRowHovered || isButtonHovered);
+  const editorPosition = useAnchoredPosition(isEditing, triggerRef, popoverRef);
+  const triggerPosition = useAnchoredEdge(anchorRef, triggerRef, hasComment ? saved : 'add');
 
-  const tooltipPosition = useAnchoredPosition(showTooltip, buttonRef, tooltipRef);
-  const editorPosition = useAnchoredPosition(isEditing, buttonRef, popoverRef);
-
-  // Present but transparent when empty, so the column doesn't reflow on hover
-  // and keyboard users can still tab to it.
-  const isButtonVisible = hasComment || isRowHovered || isEditing;
+  // Visible while its anchor is hovered (or while editing, so the trigger
+  // doesn't vanish out from under an open popover — moving the mouse to a
+  // portalled popover elsewhere in the DOM would otherwise end the hover).
+  const isVisible = isHovered || isEditing;
 
   const remaining = MAX_COMMENT_LENGTH - draft.length;
-  const tooltipId = `note-tooltip-${transactionId}`;
+
+  const handleTriggerClick = () => (isEditing ? persist(draft, true) : openEditor());
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        // Clicking the icon while the editor is open commits rather than
-        // reopening it, which would otherwise reset the draft and quietly
-        // throw away whatever had just been typed.
-        onClick={() => (isEditing ? persist(draft, true) : openEditor())}
-        onMouseEnter={() => setIsButtonHovered(true)}
-        onMouseLeave={() => setIsButtonHovered(false)}
-        aria-label={
-          hasComment
-            ? `Edit note on ${description}`
-            : `Add a note to ${description}`
-        }
-        aria-expanded={isEditing}
-        aria-describedby={showTooltip ? tooltipId : undefined}
-        title={hasComment ? 'Edit note' : 'Add a note'}
-        className={`inline-flex items-center justify-center rounded p-1 transition-opacity motion-reduce:transition-none hover:bg-gray-200 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-blue-500 ${
-          isButtonVisible ? 'opacity-100' : 'opacity-0'
-        } ${hasComment ? 'text-blue-600' : 'text-gray-400'}`}
-      >
-        {hasComment ? (
-          <MessageSquareText size={16} />
-        ) : (
-          <MessageSquarePlus size={16} />
-        )}
-      </button>
+      {/* Zero-size, so it can never itself add to any ancestor's scrollable
+          area — it only exists to mark where the portalled trigger below
+          should line up. Pin it to the cell's right edge, vertically
+          centered, via the parent's own `right-2 top-1/2` positioning. */}
+      <span
+        ref={anchorRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute right-2 top-1/2 h-0 w-0 -translate-y-1/2"
+      />
 
-      {showTooltip &&
-        createPortal(
-          <div
-            ref={tooltipRef}
-            id={tooltipId}
-            role="tooltip"
+      {createPortal(
+        hasComment ? (
+          <button
+            ref={triggerRef}
+            type="button"
+            onClick={handleTriggerClick}
+            // Native title as a fallback for text long enough to truncate —
+            // no custom popup, just the browser's own tooltip.
+            title={saved}
+            aria-label={`Edit note on ${description}`}
+            aria-expanded={isEditing}
             style={{
-              top: tooltipPosition?.top ?? 0,
-              left: tooltipPosition?.left ?? 0,
-              // Hidden for the first frame, while it's measured in place
-              visibility: tooltipPosition ? 'visible' : 'hidden',
+              top: triggerPosition?.top ?? 0,
+              left: triggerPosition?.left ?? 0,
+              visibility: triggerPosition ? 'visible' : 'hidden',
             }}
-            className="fixed z-50 max-w-xs whitespace-pre-wrap break-words rounded-lg bg-gray-900 px-3 py-2 text-sm text-white shadow-lg"
+            // A faint backdrop keeps this legible over whatever page content
+            // it happens to land on, now that it's a fixed-position overlay
+            // rather than something laid out inside the cell.
+            className={`fixed z-40 max-w-[220px] truncate rounded bg-white px-1 text-left text-xs italic text-gray-400 shadow-sm ring-1 ring-gray-100 transition-opacity duration-150 motion-reduce:transition-none hover:text-gray-600 focus:outline-none focus-visible:text-gray-700 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              isVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
           >
             {saved}
-          </div>,
-          document.body
-        )}
+          </button>
+        ) : (
+          <button
+            ref={triggerRef}
+            type="button"
+            onClick={handleTriggerClick}
+            aria-label={`Add a note to ${description}`}
+            aria-expanded={isEditing}
+            title="Add a note"
+            style={{
+              top: triggerPosition?.top ?? 0,
+              left: triggerPosition?.left ?? 0,
+              visibility: triggerPosition ? 'visible' : 'hidden',
+            }}
+            className={`fixed z-40 inline-flex items-center justify-center rounded bg-white p-0.5 text-gray-400 shadow-sm ring-1 ring-gray-100 transition-opacity duration-150 motion-reduce:transition-none hover:bg-gray-200 hover:text-gray-600 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              isVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
+          >
+            <Plus size={14} />
+          </button>
+        ),
+        document.body
+      )}
 
       {isEditing &&
         createPortal(

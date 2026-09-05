@@ -26,8 +26,9 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
   const [isTogglingReimbursed, setIsTogglingReimbursed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reimbursedError, setReimbursedError] = useState<string | null>(null);
-  // Drives the note tooltip and reveals the add-note button on empty rows.
-  const [isHovered, setIsHovered] = useState(false);
+  // Scoped to the description cell alone, so the note control only reveals
+  // when the pointer is over the description — not anywhere else in the row.
+  const [isDescriptionHovered, setIsDescriptionHovered] = useState(false);
 
   // React reuses this component when a row keeps its id across a refetch, so
   // local state has to follow the props or a reload shows stale values.
@@ -109,19 +110,38 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
   };
 
   return (
-    <tr
-      className="hover:bg-gray-50"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <tr className="hover:bg-gray-50">
       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
         {formatDate(transaction.transaction_date)}
       </td>
-      <td className="px-6 py-4 text-sm text-gray-900">
-        <div className="font-medium">{transaction.description_1}</div>
-        {transaction.description_2 && (
-          <div className="text-gray-500 text-xs">{transaction.description_2}</div>
-        )}
+      <td
+        className="relative px-6 py-4 text-sm text-gray-900"
+        // Hover lives on the cell itself now that the control is anchored to
+        // the cell's edge rather than the text — so it also reveals if the
+        // pointer is over the reserved space to the right of a short
+        // description, not just the text itself.
+        onMouseEnter={() => setIsDescriptionHovered(true)}
+        onMouseLeave={() => setIsDescriptionHovered(false)}
+      >
+        <div className="max-w-full pr-6">
+          <div className="font-medium">{transaction.description_1}</div>
+          {transaction.description_2 && (
+            <div className="text-gray-500 text-xs">{transaction.description_2}</div>
+          )}
+        </div>
+        {/* TransactionComment marks its anchor at this cell's right edge
+            (via its own absolutely-positioned, zero-size marker) but
+            portals the actual visible control to document.body — so
+            nothing it renders lives inside this table's overflow-x-auto
+            wrapper, and it can't affect that wrapper's scrollable width
+            no matter how it's positioned. */}
+        <TransactionComment
+          transactionId={transaction.id}
+          description={transaction.description_1}
+          comment={transaction.comment ?? null}
+          isHovered={isDescriptionHovered}
+          onCommentChange={onCommentChange}
+        />
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
         {transaction.account_type}
@@ -169,15 +189,6 @@ export const TransactionRow: React.FC<EditableTransactionRowProps> = ({
             </div>
           )}
         </div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-        <TransactionComment
-          transactionId={transaction.id}
-          description={transaction.description_1}
-          comment={transaction.comment ?? null}
-          isRowHovered={isHovered}
-          onCommentChange={onCommentChange}
-        />
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
         <span className={transaction.cad_amount < 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
