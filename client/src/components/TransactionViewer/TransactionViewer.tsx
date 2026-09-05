@@ -206,6 +206,19 @@ export default function TransactionViewer({
     onDataReloaded?.();
   };
 
+  // Keep the loaded page in step with an edited note, so re-sorting or
+  // paging back doesn't briefly show the pre-edit text from stale state.
+  const handleCommentChange = (
+    transactionId: string | number,
+    comment: string | null
+  ) => {
+    setTransactions((previous) =>
+      previous.map((transaction) =>
+        transaction.id === transactionId ? { ...transaction, comment } : transaction
+      )
+    );
+  };
+
   const handleSort = (column: string) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === SortOrder.Descending ? SortOrder.Ascending : SortOrder.Descending);
@@ -288,6 +301,7 @@ export default function TransactionViewer({
               currentPage={currentPage}
               onPageChange={setCurrentPage}
               categories={categories}
+              onCommentChange={handleCommentChange}
             />
           </>
         )}

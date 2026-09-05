@@ -5,7 +5,11 @@ from fastapi import APIRouter, Query, HTTPException
 
 from db.filters import TransactionFilters, TransactionSort
 from models.enums import Category, TransactionType, SortBy, SortOrder, CategoryOut
-from schemas.transaction import Transaction, PaginatedResponse
+from schemas.transaction import (
+    PaginatedResponse,
+    Transaction,
+    TransactionCommentUpdate,
+)
 from db.database import connect
 
 router = APIRouter()
@@ -15,7 +19,7 @@ router = APIRouter()
 TRANSACTION_COLUMNS = """
     id, account_type, account_number, transaction_date,
     cheque_number, description_1, description_2,
-    cad_amount, usd_amount, category, is_reimbursed, profile_id
+    cad_amount, usd_amount, category, is_reimbursed, comment, profile_id
 """
 
 
@@ -23,6 +27,45 @@ def to_transaction(row) -> Transaction:
     row_dict = dict(row)
     row_dict["category"] = CategoryOut.from_category(Category(row_dict["category"]))
     return Transaction(**row_dict)
+
+
+def update_one_column(transaction_id: int, column: str, value) -> Transaction:
+    """Write a single column and return the transaction as it now stands.
+
+    The column name is never caller-supplied — it comes from the literals at
+    the call sites below — so interpolating it into the statement is safe.
+    """
+    conn = connect()
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"UPDATE transactions SET {column} = ? WHERE id = ?",
+            (value, transaction_id),
+        )
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+
+        conn.commit()
+
+        cursor.execute(
+            f"SELECT {TRANSACTION_COLUMNS} FROM transactions WHERE id = ?",
+            (transaction_id,),
+        )
+        return to_transaction(cursor.fetchone())
+    finally:
+        conn.close()
+
+
+def normalize_comment(comment: Optional[str]) -> Optional[str]:
+    """Reduce a submitted note to either meaningful text or nothing at all.
+
+    Whitespace-only input is the same gesture as clearing the note, so it's
+    stored as NULL. That keeps "has a comment" a single check for every reader
+    of the column instead of one for NULL and another for "".
+    """
+    return (comment or "").strip() or None
 
 
 @router.get("/transactions", response_model=PaginatedResponse)
@@ -122,34 +165,7 @@ async def update_transaction_category(
     if category == Category.ALL:
         raise HTTPException(status_code=400, detail="Cannot set a transaction to this category")
 
-    conn = connect()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "UPDATE transactions SET category = ? WHERE id = ?",
-        (category.value, transaction_id),
-    )
-
-    if cursor.rowcount == 0:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Transaction not found")
-
-    conn.commit()
-
-    cursor.execute(
-        f"""
-        SELECT {TRANSACTION_COLUMNS}
-        FROM transactions
-        WHERE id = ?
-        """,
-        (transaction_id,),
-    )
-
-    row = cursor.fetchone()
-    conn.close()
-
-    return to_transaction(row)
+    return update_one_column(transaction_id, "category", category.value)
 
 
 @router.patch("/transactions/{transaction_id}/reimbursed", response_model=Transaction)
@@ -157,31 +173,26 @@ async def update_transaction_reimbursed(
         transaction_id: int,
         is_reimbursed: bool = Query(..., description="Whether this transaction has been reimbursed"),
 ):
-    conn = connect()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    return update_one_column(transaction_id, "is_reimbursed", int(is_reimbursed))
 
-    cursor.execute(
-        "UPDATE transactions SET is_reimbursed = ? WHERE id = ?",
-        (int(is_reimbursed), transaction_id),
+
+@router.patch("/transactions/{transaction_id}/comment", response_model=Transaction)
+async def update_transaction_comment(
+        transaction_id: int,
+        payload: TransactionCommentUpdate,
+):
+    """Set or replace a transaction's free-text note.
+
+    Submitting blank text clears the note rather than storing an empty string,
+    so a user who selects everything and deletes gets the result they expect
+    without having to find a separate delete action.
+    """
+    return update_one_column(
+        transaction_id, "comment", normalize_comment(payload.comment)
     )
 
-    if cursor.rowcount == 0:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Transaction not found")
 
-    conn.commit()
-
-    cursor.execute(
-        f"""
-        SELECT {TRANSACTION_COLUMNS}
-        FROM transactions
-        WHERE id = ?
-        """,
-        (transaction_id,),
-    )
-
-    row = cursor.fetchone()
-    conn.close()
-
-    return to_transaction(row)
+@router.delete("/transactions/{transaction_id}/comment", response_model=Transaction)
+async def delete_transaction_comment(transaction_id: int):
+    """Remove a transaction's note, leaving the transaction itself untouched."""
+    return update_one_column(transaction_id, "comment", None)
